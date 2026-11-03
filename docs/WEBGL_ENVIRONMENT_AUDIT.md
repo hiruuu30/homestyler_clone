@@ -1,5 +1,7 @@
 # Independent Chromium and WebGL investigation
 
+> Historical audit from an earlier environment/attempt. The current authenticated Cloud Browser successfully loads and renders the 2D/3D editor, and a bounded public-script REA static analysis now succeeds. The earlier startup and process-supervision failures below are preserved as historical evidence, not current blockers. See [current specification](TECHNICAL_SPECIFICATION.md) and [current REA results](REA_CAPABILITY_RESULTS.md). No current independent Chromium acquisition claim is made.
+
 4 November 2026, Asia/Manila. This audit concerns the execution computer, which is separate from the managed Cloud Browser.
 
 ## Outcome

@@ -1,0 +1,46 @@
+{
+  "exit_code": 0,
+  "evidence_id": "ev_a29b8e837cf4540b7bdd72dce057c180f63547920765ba700ae67762953f11e3",
+  "parent_evidence_id": "ev_3235e0a1272151bfbfd74a9d64c03629301b488f0e3d810705d895668a7d81e5",
+  "statistics": {
+    "relevant_files": 1,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 619,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 1,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 201,
+    "findings": 2,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "source_selection": {
+    "requested_paths": [
+      "inline-001.js"
+    ],
+    "unselected_files": 0
+  },
+  "view_coverage": {
+    "status": "complete-within-view",
+    "examined": 4,
+    "total": 4,
+    "next_offset": null,
+    "exhausted": true
+  },
+  "application_coverage": "partial",
+  "semantic_coverage": "unknown",
+  "coverage_limitations": [
+    "graph.coverage.status is partial",
+    "semantic_graph.coverage.status is unknown",
+    "Static source observations do not establish runtime execution or editor behavior."
+  ],
+  "source": {
+    "source_url": "https://www.homestyler.com/learn-help",
+    "html_bytes": 752918,
+    "selected_inline_scripts": 1,
+    "selected_bytes": 619,
+    "sha256": "5d67afc6383f8b37446b328b54eb86d3581256e47051614091d0033f574c033b",
+    "executed": false,
+    "scope": "public help page only; not authenticated editor"
+  }
+}

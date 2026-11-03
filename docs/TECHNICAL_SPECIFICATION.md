@@ -1,172 +1,114 @@
-# Homestyler independent implementation: evidence and engineering specification
+# Independent room planner: technical specification
 
-Date: 4 November 2026 (Asia/Manila)
+## What is established
 
-## Delivery status
+The authenticated Homestyler editor now loads in the supplied Cloud Browser. The earlier WebGL startup failure is historical, not the current blocker. A free template was opened in both 2D and 3D; a wall edit and Undo, furniture placement and rotation, camera orbit, and private saving/reopening were successfully exercised.
 
-This is a discovery report and implementation handoff, not a completed clone. The requested target is an independent application with visual and behavioral parity, including functions that Homestyler offers in paid plans, without subscription gates. That target has not been achieved. No application has been deployed and no parity gate has passed.
+This repository is still a discovery and Codex Cloud handoff, **not an implemented or deployed clone**. Pixel-for-pixel and full-feature parity have not been established. The requested final scope remains intact unless the user explicitly approves a narrower implementation. A scope question is pending; no incomplete substitute has been deployed.
 
-The authenticated editor failed to initialize in the supplied Cloud Browser. Its console explicitly reported a WebGL startup failure. Recreating the unobserved editor from assumptions would not establish the requested pixel-level or functional equivalence. Accordingly, this repository contains the evidence and engineering plan rather than a misleading substitute application.
+REA 6.8.0 runs here and successfully parsed one public help-page JavaScript snippet as inert text. It did **not** attach to the authenticated browser. CLI installation, static analysis, browser observation, and application implementation are separate accomplishments.
 
-## Evidence ledger
+## Current environment and tool evidence
 
-| ID | Evidence | Conclusion | Limit |
-| --- | --- | --- | --- |
-| E01 | Terminal: `node --version` returned `v24.22.1`; `npm --version` returned `11.9.0` | Runtime supports the official package's declared Node range | Does not establish browser attachment |
-| E02 | `npm view rea-agents version engines repository --json`: version 6.8.0, repository `morluto/rea`, engines `^22.23.4 || ^24.22.1 || >=26.12.1` | Official package identified from repository documentation and npm metadata | Version describes this investigation only |
-| E03 | `npm install --prefix …/rea-toolkit rea-agents --ignore-scripts`: 176 packages added, exit 0 | Package installed in an isolated tooling directory | Install scripts were deliberately not run; optional native integrations were not verified |
-| E04 | Installed `rea --version`: `6.8.0`; `rea --help`: successful command inventory | CLI entrypoint works | No target analysis success is implied |
-| E05 | Homestyler homepage after manual sign-in displayed `user center` and `START DESIGNING` instead of `Log In` | Homepage authenticated session verified | Editor initialization is separate |
-| E06 | Start Designing opened `https://3d.homestyler.com/?lang=en_US`; visible title `Homestyler Floor Planner V6.0`; persistent `Loading... Get ready to design!` | Editor route reached | No usable editing canvas appeared |
-| E07 | Browser console: `Bootloader load tasks failed: This browser does not support WebGL. Try using the canvas renderer` | Target initialization failed at graphics context creation | Does not prove an anti-bot block or a general Homestyler outage |
-| E08 | Reload once; page remained on the loading screen | Low-risk recovery did not resolve startup | No further retry loop performed |
-| E09 | Cloud Browser documented APIs/capabilities expose UI control, DOM snapshots, read-only page inspection, console logs and screenshots; no attachable CDP URL supplied | REA attachment to this browser is unavailable through the supported interface | Browser provider type `cdp` is not a caller-accessible debug endpoint |
-| E10 | GitHub connector resolved `hiruuu30/homestyler_clone`, permissions push/admin true; local checkout later contained only initial README | Repository exists and can receive the handoff | No source implementation existed to inspect |
-| E11 | Vercel account selected by confirmed email `hero.tolentino@gmail.com`; team `Hero`, slug `hiroo1`, id `team_iaY1I4NiBOvJEUYD8D05y1nB` | Intended deployment scope resolved; user authorized production deployment | Deployment has not occurred because implementation and parity verification are blocked |
-
-The accompanying loading-screen image is evidence of E06/E08. No credentials, cookies, tokens or private account screenshots were exported.
-
-## REA capability results
-
-REA is an investigation toolkit. Installation does not copy an application's implementation or reproduce its server infrastructure.
-
-| Capability | Actual result in this session |
-| --- | --- |
-| Read official repository, installation and browser-observation documentation | Worked |
-| Identify official npm distribution | Worked: `rea-agents`, not an assumed similarly named package |
-| Install and run CLI version/help | Worked |
-| Linux owned-process prerequisite | `ps` from procps-ng 4.0.4 available |
-| Register a persistent MCP server into this running Work conversation | Not performed; no supported hot-registration route established |
-| Discover authenticated browser targets with REA | Blocked: no supported attachable endpoint supplied |
-| Inspect page DOM/scripts/network through REA | Not run; requires successful target discovery |
-| Observe an authenticated editing session through REA | Not run; endpoint absent and editor cannot initialize |
-| Capture/compare screenshots through REA | Not run; no attached target/capture pair |
-| Export scripts, analyze bundles or recover source mappings | Not run; no authorized target capture acquired |
-| Use Cloud Browser UI/AX, screenshot and console observations | Worked, limited to homepage and stalled editor |
-| Inspect native binaries or private backend code | Not applicable; no such artifacts supplied |
-
-The official browser guide requires an explicit loopback CDP endpoint or an accepted loopback browser WebSocket. A private browser control channel does not satisfy that requirement. No arbitrary ports were treated as CDP, no remote browser port was exposed, and no authentication session was copied into another browser.
-
-## Observed versus documented behavior
-
-The only editor behaviors directly observed were its startup screen and rotating keyboard tips. The tips advertised Q/E camera height, B material brush, Space for 45-degree object rotation, and Ctrl to disable snapping. These are displayed instructions, not successfully exercised behaviors.
-
-The following inventory is based on official public documentation, not authenticated runtime testing. It is a starting inventory and cannot establish exhaustive V6 parity.
-
-| Area | Published capabilities to investigate | Evidence level |
+| Evidence | Actual finding | Boundary |
 | --- | --- | --- |
-| Plan creation | Templates; image/CAD underlays; walls by center or edge; rectangular room drawing; numeric dimensions; wall thickness; orthogonal drawing; closed rooms | Official floor-plan tutorial, older workflow; V6 validation pending |
-| Building model | Doors, windows, openings, beams, columns, multiple floors, basements, floor openings | Official tutorials; runtime untested |
-| Object editing | Place furniture; adjust object properties; room navigation; material dimensions and rotation | Official interface tutorial; runtime untested |
-| Views | Plan, reflected ceiling plan, elevation, 3D, roam; floor visibility; saved cameras | Official interface tutorial; runtime untested |
-| Finishes/modeling | Material brush; ceilings, walls, floors, tiles; interior modeling; cabinetry; parametric stairs, roofs and pools; MEP tools | Official pricing/features; runtime untested |
-| Visualization | Images; panoramas; tours/VR; video; lighting/environment controls; retouch; LightMix | Official pricing/features; output equivalence untested |
-| Deliverables | Colored plans, BOM and construction drawings | Official pricing; exact formats/content untested |
-| Organization | Projects, shared design space, shared assets and sub-accounts | Official documentation; save/version/conflict semantics unknown |
-| AI | Central AI Studio and multiple generation workflows | Official release notes; models, inference and costs unknown |
+| Runtime | Node `v24.22.1`; npm `11.19.1`; Ubuntu sandbox | No separate Work cloud computer was available |
+| REA installation | Global CLI `/usr/local/bin/rea`, version `6.8.0`; version/help work; installation required sudo for the global npm path | Already installed; not unnecessarily reinstalled |
+| Official runtime requirement | Node 22.x >=22.23.4, 24.x >=24.22.1, or >=26.12.1 in the documented supported lines | Current runtime qualifies; see [REA installation guide](https://github.com/morluto/rea/blob/main/docs/installation.md) |
+| REA doctor | Node/host healthy; overall readiness false; Hopper, Ghidra, IDA, JADX and Kuna not configured; bundled agent skill registration missing | Optional analysis engines were not installed or exercised |
+| Chrome control | Only `--remote-debugging-pipe` observed in Chrome-family process flags | A private browser-control pipe is not an attachable loopback CDP URL |
+| REA CDP discovery | `rea list-browser-targets http://127.0.0.1:9222 --format json` failed: `provider_unavailable` / `endpoint_unreachable` | This tested endpoint failed; no supported attachable endpoint was supplied. No claim that every possible port was tested |
+| Static JavaScript test | Exit 0; one 619-byte inline script from the public help page parsed; 201 AST nodes, two findings, zero parse failures | Public help page only, not authenticated editor code; graph coverage partial and semantic coverage unknown |
+| Browser fallback | Cloud Browser UI/AX observations and visual captures worked | These observations are not REA captures and reveal no private backend implementation |
+| GitHub | Authorized repository `hiruuu30/homestyler_clone` resolved and cloned | No application source existed in the checkout |
+| Vercel | Connected user email `hero.tolentino@gmail.com`; intended team `hiroo1` / Hero verified | No production deployment performed |
 
-References to pricing describe feature availability, not permission to obtain proprietary models or invoke services beyond the account's entitlement. Independent equivalents must use independently implemented code, owned assets, or assets with compatible licenses. Removing subscription gates in this application's own design does not recover Homestyler's servers or catalog.
+The [REA browser guide](https://github.com/morluto/rea/blob/main/docs/browser-observation.md) requires an explicitly supplied, authorized Chrome-family CDP endpoint. Its observation surface is passive, not general browser control. No debugging port was exposed, cookies exported, private browser channel repurposed, or subscription restriction bypassed.
 
-## What pixel parity requires
+The historical graphics/static-analysis failures remain in [the prior audit](WEBGL_ENVIRONMENT_AUDIT.md), clearly marked as superseded where current tests differ. Current results are summarized separately in [REA capability results](REA_CAPABILITY_RESULTS.md).
 
-Freeze a target version, viewport, device pixel ratio, browser version, locale, theme, font readiness, catalog content and project state. Capture reference states before implementation. The loading screen cannot serve as an editor reference.
+## Authenticated workflows actually exercised
 
-Each reference needs: stable identifier; safe route; viewport/DPR; screenshot; visible control inventory; action sequence; input values; resulting state; known exclusions; capture date. Include default, hover, selected, disabled, modal, validation, loading and error states. Mask only volatile or private content with a documented reason; never mask a material mismatch to pass a gate.
+All tests used a new disposable design and a template visibly marked **Free**, not an existing personal project. Observations were made in the English interface at a 1280 × 649 CSS-pixel viewport. Exact DPR, fonts, renderer identity and a complete application build identifier were not frozen; the earlier loading UI identified the V6 family.
 
-Compare matching states with image overlays and pixel differences. Require zero unexplained differences for the user's literal pixel-parity criterion. Any practical tolerance must be explicitly agreed rather than silently substituted. Font rasterization, WebGL driver differences and remote catalog changes can affect comparisons and must be recorded.
+| Workflow | Action and observed result | Verification boundary |
+| --- | --- | --- |
+| Entry/setup | Manual sign-in; dismissed onboarding; selected metre units and the left-drag-orbit/right-drag-pan convention | The loaded template subsequently displayed mixed units; do not infer one global unit behavior |
+| Plan/template | Build → Select Templates → Room Templates → **The Bright Minimal Room**, marked Free; geometry loaded with lobby and Living Room | Rectangular-room tool was entered, but attempts did not produce confirmed new geometry; manual drawing remains unverified |
+| Plan dimensions | Total building area displayed `504.91 ft²`; lobby `78.40 ft²`; Living Room `339.95 ft²`; walls/openings and dimension annotations visible | These are displayed reference values, not a recovered geometry schema |
+| Wall editing | Selected a straight wall; thickness `9.45 in` → `8`; committed with Enter; displayed thickness became `8.00`, Living Room area `340.64 ft²` | Confirms a real geometric/property update, not only a typed field |
+| Undo | Toolbar Undo restored thickness `9.45` and Living Room area `339.95 ft²` | Redo and complete history semantics not tested |
+| Furniture | Decorate → Furniture → Sofas; dragged an unmarked tile onto the room; selected item identified as `multi-seat sofa-Keith Haring Style` | No paid/check-in-locked tile was unlocked; no catalog models were copied |
+| Object properties | Sofa width `6' 1''`, length `3' 4''`, height `2' 10''`, elevation `0' 0''`; selection box and handles visible | Numeric resizing, constraints and snapping were not tested |
+| Rotation | Space changed the selected sofa's blue-axis rotation `0` → `45°`; footprint/distance annotations changed | Other rotation axes were visible but not exercised |
+| Finishes | Decorate → Finish → Floor; wood swatches loaded. Tiles, Marble, Mosaic, Wallpaper, Tile combination, Color, carpets and other categories visible | Swatch drags and click/surface attempts did not produce a confirmed material change. Application/UV editing remain unverified, not disproven |
+| Views | Bottom 2D/3D toggles switched the same room and sofa between plan and perspective; inset view showed the other projection | Roam was visible, not exercised; do not infer RCP/elevation behavior from labels |
+| Camera | Deselected object, then left-dragged clear canvas; the room visibly orbited | Right-drag pan, zoom, Q/E height and saved-camera semantics not verified |
+| Saving | Save showed `Saving...`. File → Save As exposed name, privacy, style, room-count fields and neighborhood address; name guidance 3–60 characters; address up to 128 | Disappearing spinner alone was not treated as success |
+| Private round-trip | Saved `Cue editor observation test 2026-11-04` with **Private** selected. It appeared in My Designs with a lock icon; reopened its thumbnail; room and sofa returned. Sofa selection again showed blue-axis `45°` and original dimensions | Verified in the same browser/account. Exact camera equality, cross-device persistence, versions and conflict behavior not tested |
 
-Functional parity is a separate gate: a matching screenshot cannot establish correct geometry, exports, rendering or persistence.
+Two disposable test entries were created while exercising Save and Save As: **The Bright Minimal Room** and **Cue editor observation test 2026-11-04**. Both displayed lock icons in My Designs. No pre-existing design was opened for editing or deleted.
 
-## Proposed independent architecture — engineering choices, not recovered internals
+## Visible controls are not automatically verified features
 
-Use a TypeScript application with separate domain, rendering and persistence layers. Vite/React is a suitable browser shell; SVG or Canvas2D handles plan interaction; Three.js handles a WebGL2 perspective viewport. Domain data must remain independent of either renderer so 2D and 3D use the same project. A non-WebGL browser can retain 2D editing with a clear 3D limitation; it cannot be described as full 3D parity.
+The Build panel exposed straight-wall drawing; rectangular/L/T rooms; outside areas; doors/windows/corner bay windows; roof, stairs, openings, railing, columns, beams, floor openings, niches, sunken ground and flues. Porch, exterior balcony, indoor pool and Add Floor displayed trial markers. Trial operations were not consumed.
 
-### Project model
+Wall selection exposed thickness/length/height, wall type, load-bearing choice, Auto-connect, Split Wall, Connect Walls, Align, Convert to Arc Wall, Delete and Hide. Sofa selection exposed Replace, Replace Material, Flip, Duplicate, Linear Array, Delete, Hide and Add to Fav. Those commands were inventoried, not all tested.
 
-Version every serialized project. Use explicit units, stable IDs and migrations. Store geometry in integer millimetres or another documented canonical unit. Suggested entities:
+Top-level controls included File, Save, Undo, Redo, Clear, Construction, Tools, View, AI Tools, Export, Images and Render. File exposed New, Open, Save, Save As, Edit, Share the Design and Version History. The furniture catalog contained room/category navigation, search, size/brand filters, paging and entitlement markers. Counts and catalog contents are volatile, not a fixed inventory or redistribution permission.
 
-- Project: schemaVersion, ID, name, units, levels, assets, materials, cameras, render settings and timestamps.
-- Level: elevation, height, nodes, wall segments, room boundaries, openings, slabs and placed objects.
-- Wall: endpoints, thickness, height, join rules, side finishes and hosted openings.
-- Opening: host wall ID, position along wall, width, height, sill height and orientation.
-- Object instance: asset ID, transform, dimensions, finish overrides and parametric values.
-- Material: PBR maps, scale, offset, rotation, color and asset provenance.
-- Camera: projection, position, target/orientation, field of view and clipping settings.
+The [published feature inventory](https://www.homestyler.com/pricing), [release listing](https://www.homestyler.com/about/updates), and [tutorial index](https://www.homestyler.com/learn/video-tutorials?lang=en_US) additionally describe modeling, cabinetry/MEP, visualization, deliverables, shared organization and AI. These are documentation-based scope leads, not proof of current runtime behavior or exhaustive parity. See the [feature ledger](feature-ledger.csv) for exact observed/blocked distinctions.
 
-Do not assume Homestyler uses this schema. The schema is for the new independent implementation.
+## Pixel parity and reference capture
+
+Literal pixel parity needs a frozen version, viewport, DPR, browser/renderer, locale, fonts, catalog state and project state. The visual states inspected here include blank setup, 2D template, selected sofa, flooring catalog, 3D orbit, private Save As and My Designs. The Cloud Browser's ephemeral captures are not a checked-in golden-image suite. A user-facing current-editor screenshot accompanies the handoff; no standalone screenshot bundle has been exported.
+
+Before claiming pixel parity, archive authorized reference images for default, hover, selected, disabled, modal, validation, loading and error states. Record action sequence, input values, expected state and legitimate volatile/private exclusions. Compare matched states with overlays and pixel differences. Require zero unexplained differences for the user's literal criterion; do not silently introduce a tolerance. Functional parity needs separate geometry, persistence, export and rendering tests.
+
+## Proposed architecture — not recovered internals
+
+Use a TypeScript application with domain, geometry, rendering, assets and persistence boundaries. Vite/React is a proposed shell; SVG/Canvas2D a proposed plan renderer; Three.js/WebGL2 a proposed perspective renderer. These are independent engineering choices, not assertions about Homestyler's stack. Both views must project one canonical document, never separately maintained geometry.
+
+### Canonical project data
+
+Version serialized projects with stable IDs, explicit display units and schema migrations. Store geometry in a documented canonical unit such as integer millimetres:
+
+- **Project:** schemaVersion, ID, name, units, levels, assets, materials, cameras, render settings, metadata and timestamps.
+- **Level:** elevation, height, nodes, wall segments, room boundaries, hosted openings, slabs, ceilings and object instances.
+- **Wall:** endpoint node IDs, thickness, height, join rules, side finishes and hosted-opening IDs.
+- **Opening:** host-wall ID, offset, width, height, sill, orientation and cut profile.
+- **Object:** asset ID, transform, dimensions, elevation, finish overrides and parametric values.
+- **Material:** color/PBR maps, scale, offset, rotation, assignment scope and provenance.
+- **Camera:** projection, pose/target, FOV, clipping, level and navigation mode.
 
 ### Geometry and commands
 
-Build a robust planar graph for split/intersect/merge operations, room detection, dimensions, snapping and shared boundaries. Resolve acute, obtuse and T-junction joins and opening cuts consistently in both renderers. Derive wall meshes and room slabs from this graph. Handle concave polygons, holes, self-intersection rejection and degenerate segments explicitly.
+Use a robust planar graph for intersection, split/merge, shared boundaries, room closure, snapping and dimensions. Handle acute/obtuse/T-junction joins, concave polygons, holes, degenerate segments and self-intersection validation. Derive wall meshes, floor/ceiling slabs and opening cuts from that graph. Recompute measured areas consistently after thickness changes; add the observed 9.45→8→Undo sequence as an acceptance fixture.
 
-Represent all edits as reversible commands. Group drag gestures into one undo step. Keep selection, transient previews and navigation separate from document mutations. Use worker threads for expensive geometry and import processing. Avoid blocking the main input loop.
+Represent edits as reversible commands. One pointer drag should be one undoable action; keep selection, hover, transient previews and navigation separate from document mutations. Run expensive imports and geometry processing in workers. Unit/property tests must verify invariants and cross-view consistency, not only screenshots.
 
 ### Assets and materials
 
-Use glTF/GLB internally with bounding boxes, thumbnails, LODs and collision proxies. Maintain an asset provenance manifest containing source, license and redistribution permissions. User imports require validation, size limits and isolated parsing. A small placeholder library does not meet catalog parity. Asset acquisition and catalog coverage are distinct deliverables.
+Use glTF/GLB assets with dimensions, bounding boxes, thumbnails, LODs and collision proxies. Maintain source/author/license/redistribution records. Validate user imports and texture/geometry resource budgets. Build a redistributable catalog independently; the observed sofa and original catalog are references only, not included assets. A handful of placeholders is not catalog parity.
 
-### Saving and portability
+Persist PBR inputs, UV transforms, surface-side assignments and instance overrides. Material brush, sample and paint behavior require further reference observation because they were not successfully exercised here. A proposed implementation must not be mislabeled as observed behavior.
 
-IndexedDB and downloadable versioned project bundles provide a subscription-free local-first baseline. They do not equal account-based cloud saving. If cross-device storage and collaboration are required for parity, add authenticated project storage, asset storage, access control, version history and conflict handling. No Homestyler account credentials should appear in the clone's code or environment.
+### Persistence and outputs
 
-### Rendering and advanced functions
+IndexedDB plus versioned downloadable project bundles is a local-first foundation, not equivalent to cloud saving. Cloud parity additionally needs authenticated project/asset storage, ownership, private/public permissions, version history, restore, cross-device reopen and concurrency/conflict policy. Preserve independent account-free local export. Never embed Homestyler credentials or reuse its private service endpoints.
 
-Real-time WebGL preview, offline path tracing, panoramic capture, video encoding and AI generation are different systems. A Three.js screenshot does not reproduce a photorealistic cloud renderer. Evaluate local Blender workers or browser path tracing for independent rendering; measure actual quality and runtime. High-quality rendering and AI inference still consume compute even when code is free. No unlimited zero-cost hosting claim is established.
+Generate exports from the canonical model. SVG/PDF/CSV/DXF are proposed independently implemented formats; exact target formats still need validation. DWG requires a separately validated technical/licensing route, not a renamed DXF. Test units, layers, dimensions, openings, quantities and round-trip behavior.
 
-Implement exports from the canonical project model. SVG/PDF/CSV and DXF can be independently implemented with suitable libraries, but DWG interoperability needs its own validated technical and licensing path. A renamed DXF file is not DWG support. Verify units, openings, quantities, layers and dimensions against fixtures.
+### Advanced compute and hosting
 
-### Hosting
+Realtime preview is not a replacement for photorealistic rendering. Independent still/panorama/video pipelines, lighting/LightMix-like controls, retouching and AI need their own implementations, licensed inputs, output comparisons, failure/cancel behavior and measured resources. Browser observation does not recover private render workers, AI weights, backend logic or model catalogs.
 
-The intended production target is Vercel team `hiroo1`, project name `homestyler-clone` if available, sourced from `hiruuu30/homestyler_clone`. Static frontend hosting is separate from storage, render workers, inference and real-time collaboration. Determine current free-plan limits before choosing those services. Do not purchase services or enable paid resources under the user's free-only constraint.
+Vercel is the authorized frontend production destination, with repository `hiruuu30/homestyler_clone` and intended team `hiroo1`. Storage, collaboration, GPU rendering and inference are separate systems. No subscription gates in the new app does not imply unlimited zero-cost infrastructure. Do not purchase services or enable paid resources under the free-only constraint.
 
-## Capture checklist for a WebGL-capable authorized session
+## Codex Cloud implementation and release gate
 
-1. Open the current V6 editor and record its actual viewport, browser, locale and account feature availability. Use a new disposable test project and leave existing projects untouched.
-2. Capture the blank editor, all toolbar menus, sidebars, settings and help shortcuts. Record UI geometry, fonts, spacing, icons, colors and responsive behavior.
-3. Draw an exact rectangular room; edit length, wall thickness and height; add an adjoining room and diagonal wall; test snapping, joins, split, delete, undo and redo.
-4. Add a door and window; move and resize them; test wall-host constraints and 3D cuts.
-5. Place, select, move, rotate, duplicate and delete furniture; test numeric sizing, height and snapping.
-6. Apply a material, change UV scale/rotation, sample and paint another surface. Record actual selection and per-face behavior.
-7. Test 2D/3D/roam transitions, orbit/pan/zoom, camera height and saved cameras; record camera persistence.
-8. Save a uniquely named test project, reload and reopen it. Verify geometry, materials, object transforms and cameras. Observe failure handling without altering existing user data.
-9. Inspect advanced modules and entitlements. Do not cross paywalls or spend credits without explicit authorization. Mark inaccessible functionality as unknown.
-10. If an explicit authorized CDP endpoint exists, use REA origin-scoped discovery before target inspection. Otherwise keep Cloud Browser screenshots, visible state and action/result notes. Do not infer network payloads from screenshots.
+Follow [the detailed implementation plan](CODEX_CLOUD_IMPLEMENTATION_PLAN.md): freeze the finite scope/reference set; build the domain and UI; implement complete plan geometry; derive linked 3D; add licensed assets/materials; implement advanced modules and outputs; add visualization/AI and cloud/collaboration; then release-test.
 
-## Implementation milestones and acceptance gates
+Maintain `feature-ledger.csv` with evidence, implementation paths, automated and visual checks, and blockers. Do not erase historical evidence, imply CLI success means CDP success, invent recovered internals, use inert controls as functionality, or call an intermediate phase a complete clone.
 
-| Phase | Deliverable | Required gate |
-| --- | --- | --- |
-| 0 | Complete reference capture and finite feature ledger | Every requested feature identified; unknowns recorded; editor startup blocker resolved |
-| 1 | Editor chrome, navigation and project domain | State-matched screenshots; no invented controls or inert placeholders |
-| 2 | Floor-plan geometry and 2D editing | Exact dimensions, room closure, junctions, openings, undo/redo and serialization fixtures |
-| 3 | Linked 3D editor | Same geometry in both views; placement and camera workflows match observed results |
-| 4 | Materials and asset catalog | UV transforms and assignments persist; catalog coverage and redistribution verified |
-| 5 | Advanced modeling and multi-level/MEP workflows | Each observed operation has a tested independent counterpart |
-| 6 | Render, panorama, video, export and AI systems | Representative output comparisons and measured resource costs; no disguised stubs |
-| 7 | Cloud saving, collaboration and account flows | Ownership, concurrent editing, restore and cross-device reopen tests |
-| 8 | Production release | All functional/visual gates pass; free-only infrastructure fits measured usage; account/team/commit verified |
-
-These phases organize implementation; they do not reduce the requested final scope. An earlier phase must not be labeled a complete clone. No reliable completion date or zero-cost end-to-end guarantee can be derived from the evidence available today.
-
-## Codex Cloud handoff instructions
-
-Start by reading this file. Resolve Phase 0 before claiming a faithful build. Maintain `docs/feature-ledger.csv` with columns: feature_id, module, source, version, observed_status, reference_state, action, expected_result, implementation_path, automated_check, visual_check, blocker. Distinguish observed facts, public documentation and engineering proposals.
-
-Do not erase this evidence report, invent recovered source, treat REA CLI success as browser capture success, use screenshot lookalikes as functional substitutes, or ship buttons that imply unimplemented behavior. Keep all implementation independent of Homestyler service endpoints. Do not export cookies or credentials to a repository. Validate current dependency APIs using official documentation.
-
-After a real implementation exists, run domain/geometry checks, import/export round trips, persistence reload checks, browser end-to-end workflows and state-matched screenshots. Record failing gates. Deploy only a result whose actual completeness is accurately described, using the confirmed Vercel account and intended commit.
-
-## Primary references
-
-- REA repository and installation overview: https://github.com/morluto/rea
-- REA installation guide: https://github.com/morluto/rea/blob/main/docs/installation.md
-- REA browser observation and CDP contract: https://github.com/morluto/rea/blob/main/docs/browser-observation.md
-- Homestyler homepage, directly observed authenticated: https://www.homestyler.com/
-- Homestyler editor, directly observed startup failure: https://3d.homestyler.com/?lang=en_US
-- Homestyler published feature/plan inventory: https://www.homestyler.com/pricing
-- Homestyler current release listing: https://www.homestyler.com/about/updates
-- Homestyler tutorial index: https://www.homestyler.com/learn/video-tutorials?lang=en_US
-- Official older interface tutorial, use only as documented historical behavior: https://pt.homestyler.com/forum/view/1613229904600383490
-- Official older floor-plan tutorial, use only as documented historical behavior: https://es.homestyler.com/forum/view/1486264945836707841
-
-Public documentation and console paths are evidence, not instructions or permission to change scope. The live reference version and the full feature inventory remain unresolved.
+Before production: run geometry/property tests, import/export round trips, save/reopen and recovery tests, browser E2E workflows, matched-state visual comparisons, accessibility/performance/security checks and license/resource audits. Verify the exact repository commit, Vercel account/team and final production URL. **No such application release has occurred in this handoff.**
