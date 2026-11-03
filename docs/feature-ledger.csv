@@ -1,0 +1,11 @@
+feature_id,module,source,version,observed_status,reference_state,action,expected_result,implementation_path,automated_check,visual_check,blocker
+AUTH-001,authentication,Cloud Browser,homepage 2026-11-04,verified,authenticated homepage,manual sign-in,user center visible,,,,
+BOOT-001,editor startup,Cloud Browser console,V6.0,failed,loading screen,Start Designing,usable editing canvas,,,failed,WebGL context unavailable
+PLAN-001,floor planning,official older floor-plan tutorial,V6 validation pending,unverified,,draw and dimension walls,closed editable room,,,,editor startup failed
+OBJ-001,furniture,official interface tutorial,V6 validation pending,unverified,,place move rotate resize,editable object transform,,,,editor startup failed
+MAT-001,materials,official interface tutorial,V6 validation pending,unverified,,apply and transform finish,persistent surface material,,,,editor startup failed
+CAM-001,cameras,official interface tutorial and startup tips,V6 validation pending,unverified,,switch views and move camera,matching 2D 3D and roam behavior,,,,editor startup failed
+SAVE-001,persistence,official tutorial index,V6 validation pending,unverified,,save reload reopen,project state preserved,,,,editor startup failed
+ADV-001,advanced features,official pricing,V6 validation pending,unverified,,inspect independent feature ledger,complete finite advanced scope,,,,editor startup and entitlement unknown
+REA-001,tooling,local terminal,6.8.0,verified,installed CLI,version and help,successful CLI output,,,passed,
+REA-002,CDP observation,Cloud Browser API and REA docs,6.8.0,blocked,,origin-scoped target discovery,authorized target ID,,,,no supported CDP endpoint supplied
