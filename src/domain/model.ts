@@ -1275,11 +1275,15 @@ export function normalizeProject(value: unknown): DesignProject {
     if (!value || typeof value !== 'object') throw new TypeError('room must be an object');
     const room = value as Room;
     const levelId = levelFor(room);
-    if (room.holes === undefined) return freeze({ ...room, levelId });
-    const validated = createPolygonRoomWithHoles(
+    const validated = room.holes === undefined ? {} : createPolygonRoomWithHoles(
       room.id, room.name, room.points, room.holes, room.floorMaterialId, levelId, units,
     );
-    return freeze({ ...room, ...validated, levelId, ceilingVisible: typeof room.ceilingVisible === 'boolean' ? room.ceilingVisible : true });
+    return freeze({
+      ...room,
+      ...validated,
+      levelId,
+      ceilingVisible: typeof room.ceilingVisible === 'boolean' ? room.ceilingVisible : true,
+    });
   });
   const walls = candidate.walls.map((wall) => freeze({ ...wall, levelId: levelFor(wall) })) as Wall[];
   const wallOpenings: WallOpening[] = (candidate.wallOpenings ?? []).map((value) => {

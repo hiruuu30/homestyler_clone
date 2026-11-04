@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { frameProjectCamera } from '../domain/camera';
 import { wallSolidSegments } from '../domain/wall-openings';
-import type { DesignProject, Point, Room } from '../domain/types';
+import type { DesignProject, Level, Point, Room } from '../domain/types';
 
 export type SceneViewportProps = {
   project: DesignProject;
@@ -36,6 +36,35 @@ function polygonShape(points: readonly Point[], holes: readonly (readonly Point[
 
 export function createRoomFloorGeometry(room: Pick<Room, 'points' | 'holes'>): THREE.ShapeGeometry {
   return new THREE.ShapeGeometry(polygonShape(room.points, room.holes));
+}
+
+/** Build the room ceiling outline independently from floor-surface openings. */
+export function createRoomCeilingGeometry(room: Pick<Room, 'points'>): THREE.ShapeGeometry {
+  return new THREE.ShapeGeometry(polygonShape(room.points));
+}
+
+export function ceilingElevationForLevel(level?: Pick<Level, 'elevation' | 'height'>): number {
+  return (level?.elevation ?? 0) + (level?.height ?? 2.4);
+}
+
+export function createVisibleRoomCeilings(rooms: readonly Room[], elevation: number): THREE.Mesh[] {
+  if (!Number.isFinite(elevation)) throw new TypeError('ceiling elevation must be finite');
+  return rooms.filter((room) => room.ceilingVisible).map((room) => {
+    const material = new THREE.MeshStandardMaterial({
+      color: '#faf9f6',
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+      roughness: 0.98,
+    });
+    const mesh = new THREE.Mesh(createRoomCeilingGeometry(room), material);
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.y = elevation;
+    mesh.receiveShadow = true;
+    mesh.renderOrder = 1;
+    return mesh;
+  });
 }
 
 function addBox(
@@ -75,7 +104,9 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#eef1f2');
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 1000);
-    const floorElevation = project.levels.find((level) => level.id === project.activeLevelId)?.elevation ?? 0;
+    const activeLevel = project.levels.find((level) => level.id === project.activeLevelId);
+    const floorElevation = activeLevel?.elevation ?? 0;
+    const ceilingElevation = ceilingElevationForLevel(activeLevel);
     const initialFrame = frameProjectCamera(project, host.clientWidth / Math.max(1, host.clientHeight), camera.fov);
     const target = new THREE.Vector3(initialFrame.targetX, initialFrame.targetY, initialFrame.targetZ);
     let radius = initialFrame.radius;
@@ -115,6 +146,8 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       mesh.receiveShadow = true;
       scene.add(mesh);
     });
+
+    createVisibleRoomCeilings(project.rooms, ceilingElevation).forEach((mesh) => scene.add(mesh));
 
     project.walls.forEach((wall) => {
       const dx = wall.end.x - wall.start.x;
