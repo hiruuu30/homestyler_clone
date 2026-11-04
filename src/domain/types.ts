@@ -14,6 +14,18 @@ export type Level = Readonly<{
   height: number;
 }>;
 
+export type FloorFinishPattern = 'none' | 'wood' | 'tile';
+
+export type FloorFinishMapping = Readonly<{
+  pattern: FloorFinishPattern;
+  colorOverlay: boolean;
+  rotation: number;
+  offsetX: number;
+  offsetY: number;
+  scaleX: number;
+  scaleY: number;
+}>;
+
 export type Room = Readonly<{
   id: string;
   name: string;
@@ -21,6 +33,7 @@ export type Room = Readonly<{
   holes?: readonly (readonly Point[])[];
   floorMaterialId: string;
   ceilingVisible: boolean;
+  floorFinish?: FloorFinishMapping;
   levelId: string;
 }>;
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { snapPlanPoint } from '../domain/snapping';
 import type { DesignProject, FurnitureInstance, Point, ToolMode } from '../domain/types';
+import { floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
 
 export type PlanCanvasProps = {
   project: DesignProject;
@@ -73,6 +74,11 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
   const gridSize = GRID_SIZE * unitsPerMetre;
   const polygonTool = tool === 'polygon' || tool === 'hole';
+  const roomFill = (room: DesignProject['rooms'][number]) => {
+    const color = project.materials.find((material) => material.id === room.floorMaterialId)?.color ?? '#c9b8a0';
+    const spec = floorPatternSpec(room.id, floorFinishForRoom(room), color, project.units);
+    return spec ? `url(#${spec.id})` : color;
+  };
 
   useEffect(() => setCameraBox(null), [fitRequest]);
   useEffect(() => {
@@ -259,6 +265,24 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
         <pattern id="plan-grid" width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
           <path d={`M ${gridSize} 0 L 0 0 0 ${gridSize}`} className="plan-grid-line" fill="none" />
         </pattern>
+        {project.rooms.map((room) => {
+          const mapping = floorFinishForRoom(room);
+          const color = project.materials.find((material) => material.id === room.floorMaterialId)?.color ?? '#c9b8a0';
+          const spec = floorPatternSpec(room.id, mapping, color, project.units);
+          if (!spec) return null;
+          const halfHeight = spec.height / 2;
+          const groovePath = spec.pattern === 'wood'
+            ? `M 0 0 H ${spec.width} M 0 ${halfHeight} H ${spec.width} M 0 ${spec.height} H ${spec.width} M ${spec.width / 2} 0 V ${halfHeight} M 0 ${halfHeight} V ${spec.height} M ${spec.width} ${halfHeight} V ${spec.height}`
+            : `M 0 0 H ${spec.width} V ${spec.height} H 0 Z`;
+          const highlightPath = spec.pattern === 'wood'
+            ? `M 0 ${spec.strokeWidth} H ${spec.width} M 0 ${halfHeight + spec.strokeWidth} H ${spec.width}`
+            : `M ${spec.strokeWidth} ${spec.strokeWidth} H ${spec.width - spec.strokeWidth} V ${spec.height - spec.strokeWidth} H ${spec.strokeWidth} Z`;
+          return <pattern key={spec.id} id={spec.id} patternUnits="userSpaceOnUse" width={spec.width} height={spec.height} patternTransform={spec.transform}>
+            <rect width={spec.width} height={spec.height} fill={spec.baseColor} />
+            <path d={groovePath} fill="none" stroke={spec.grooveColor} strokeWidth={spec.strokeWidth} />
+            <path d={highlightPath} fill="none" stroke={spec.highlightColor} strokeWidth={spec.strokeWidth / 2} />
+          </pattern>;
+        })}
       </defs>
       <rect className="plan-grid" x={bounds.minX} y={bounds.minY} width={bounds.width} height={bounds.height} fill="url(#plan-grid)" />
       {project.underlays.map((underlay) => <image key={underlay.id} href={underlay.src} x={underlay.x} y={underlay.y} width={underlay.width} height={underlay.height} opacity={underlay.opacity} preserveAspectRatio="none" pointerEvents="none" aria-label={`${underlay.name} plan underlay`} />)}
@@ -267,6 +291,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
           key={room.id}
           className={`plan-room${selectedId === room.id ? ' is-selected' : ''}`}
           d={roomPath(room)}
+          fill={roomFill(room)}
           fillRule="evenodd"
           onPointerDown={(event) => { if (polygonTool || tool === 'wall') return; event.stopPropagation(); onSelect(room.id); }}
         />

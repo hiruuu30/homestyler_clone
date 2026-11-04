@@ -1,24 +1,24 @@
-# Independent room-planner prototype and Homestyler research
+# Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The latest milestone makes the existing per-room “Show ceiling in 3D” control render a translucent ceiling at the active floor's configured height. Production status is tracked separately in the feature ledger at [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/). This is not a complete clone or a parity claim; original Homestyler catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The latest local milestone adds per-room floor-finish mapping controls and procedural plan/3D rendering. The live production alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); the feature ledger records the currently deployed revision separately from local work. This is not a complete clone or a parity claim. Original catalog assets remain deferred.
 
-## Current milestone
+## Current milestone: floor-finish mapping
 
-The 3D scene now creates a triangulated ceiling for each visible room on the active floor, at the active level's elevation plus its configured height. Hiding a room ceiling removes its mesh. Older project data without a ceiling visibility value defaults to visible, while explicit off values persist. Ceilings are translucent in this independent implementation to keep the current exterior-style 3D camera useful. Room floor-surface openings are not silently passed through the ceiling; they remain distinct from structural through-slab openings.
+Rooms can use a generic wood-plank or square-tile pattern, optionally tinted by the selected floor material. Rotation, horizontal/vertical offset, and independent X/Y scale are editable in the room inspector. The mapping appears in the 2D plan and 3D floor, is included in editable SVG exports, survives local save/reload and Undo/Redo, and converts its linear offsets when switching between metres and feet. Older projects default to an unpatterned floor.
 
-The geometry helper and active-floor filtering are tested locally. Headless Chromium confirmed that toggling the control changes the 3D canvas, Undo/Redo works, and the visibility value survives save/reload. No Homestyler ceiling rendering or behavior comparison has been completed; exact materials, camera/roam semantics, slab thickness, multi-floor occlusion, and through-slab behavior remain unknown.
+These are original procedural patterns, not Homestyler textures or catalog materials. Reference controls were observed, but their exact mapping, UV, scale and material behavior has not been tested against Homestyler.
 
-## Existing prototype capabilities
+## Other implemented capabilities
 
-The independent local editor supports rectangular and concave polygon rooms, snapping, wall topology repair and collinear joins, hosted door/window openings, editable wall properties, multiple floors, furniture transforms and arrays, hidden-object recovery, local save/reload, plan underlays, unit conversion, and SVG/CSV/JSON exports. The latest prior increment adds room floor-surface openings with net-area deduction and 2D/3D geometry. These generic implementations do not establish equivalent Homestyler behavior.
+The independent editor supports rectangular and concave polygon rooms, snapping, wall topology repair and collinear joins, hosted door/window openings, editable wall properties, multiple floors, floor-surface openings, translucent 3D ceilings, furniture transforms and arrays, hidden-object recovery, local persistence, plan underlays, unit conversion, and SVG/CSV/JSON exports. These generic implementations do not establish equivalent Homestyler behavior.
 
 ## Verification and boundaries
 
 - **Verified full-parity completion: 0%.** No complete feature/state suite has passed exact functional and pixel-level comparison.
-- **Original catalog asset coverage: 0%.** The source catalog is deferred; the application contains no original Homestyler models, materials, or textures.
-- **Local checks:** 89 unit tests pass; the strict TypeScript/Vite production build succeeds (with the existing large 3D chunk warning); the ceiling browser smoke test verified canvas pixel changes, Undo/Redo, local persistence, and zero page errors.
-- **Production:** the currently verified public bundle and its evidence are recorded in `docs/feature-ledger.csv`; deployment validation is separate from local tests.
-- Full scope remains incomplete, including advanced/server-dependent features, broader topology, catalog/material coverage, cloud workflows, and a comprehensive golden-image suite. Use only independently authored code and generic placeholder assets until authorized licensed assets are available.
+- **Original catalog asset coverage: 0%.** No original Homestyler models, materials or textures are present.
+- **Local checks:** 96 unit tests pass; the strict TypeScript/Vite production build succeeds, with a warning for the large lazy 3D chunk. Chromium verified visible 2D/3D pattern changes, transformed mapping values, Undo/Redo, save/reload, and no page errors.
+- **Production:** deployment status and byte-for-byte bundle evidence are tracked in `docs/feature-ledger.csv`; local verification is not deployment verification.
+- Significant scope remains incomplete, including broader topology, catalog/material coverage, cloud workflows, advanced/server-dependent features, and a comprehensive golden-image suite. Use only independently authored code and generic procedural finishes until authorized licensed assets are available.
 
 ## Project files
 

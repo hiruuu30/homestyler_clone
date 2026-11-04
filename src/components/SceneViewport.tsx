@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { frameProjectCamera } from '../domain/camera';
 import { wallSolidSegments } from '../domain/wall-openings';
 import type { DesignProject, Level, Point, Room } from '../domain/types';
+import { floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
 
 export type SceneViewportProps = {
   project: DesignProject;
@@ -13,6 +14,53 @@ export type SceneViewportProps = {
 
 function materialColor(project: DesignProject, id: string, fallback: string): string {
   return project.materials.find((material) => material.id === id)?.color ?? fallback;
+}
+
+function createFloorPatternTexture(room: Room, project: DesignProject, material: string): THREE.CanvasTexture | null {
+  const mapping = floorFinishForRoom(room);
+  const spec = floorPatternSpec(room.id, mapping, material, project.units);
+  if (!spec) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.fillStyle = spec.baseColor;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.lineWidth = Math.max(1, spec.strokeWidth / spec.width * canvas.width);
+  if (spec.pattern === 'wood') {
+    context.strokeStyle = spec.grooveColor;
+    context.beginPath();
+    context.moveTo(0, 0); context.lineTo(256, 0);
+    context.moveTo(0, 128); context.lineTo(256, 128);
+    context.moveTo(0, 256); context.lineTo(256, 256);
+    context.moveTo(128, 0); context.lineTo(128, 128);
+    context.moveTo(0, 128); context.lineTo(0, 256);
+    context.moveTo(256, 128); context.lineTo(256, 256);
+    context.stroke();
+    context.strokeStyle = spec.highlightColor;
+    context.lineWidth = Math.max(1, context.lineWidth / 2);
+    context.beginPath();
+    context.moveTo(0, 2); context.lineTo(256, 2);
+    context.moveTo(0, 130); context.lineTo(256, 130);
+    context.stroke();
+  } else {
+    context.strokeStyle = spec.grooveColor;
+    context.strokeRect(0, 0, 256, 256);
+    context.strokeStyle = spec.highlightColor;
+    context.lineWidth = Math.max(1, context.lineWidth / 2);
+    context.strokeRect(context.lineWidth, context.lineWidth, 256 - context.lineWidth * 2, 256 - context.lineWidth * 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1 / spec.width, 1 / spec.height);
+  texture.offset.set(mapping.offsetX / spec.width, -mapping.offsetY / spec.height);
+  texture.rotation = -THREE.MathUtils.degToRad(mapping.rotation);
+  texture.center.set(0, 0);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function polygonShape(points: readonly Point[], holes: readonly (readonly Point[])[] = []): THREE.Shape {
@@ -139,7 +187,14 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
 
     project.rooms.forEach((room) => {
       const geometry = createRoomFloorGeometry(room);
-      const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: materialColor(project, room.floorMaterialId, '#c9b8a0'), side: THREE.DoubleSide }));
+      const color = materialColor(project, room.floorMaterialId, '#c9b8a0');
+      const texture = createFloorPatternTexture(room, project, color);
+      const material = new THREE.MeshStandardMaterial({
+        color: texture ? '#ffffff' : color,
+        side: THREE.DoubleSide,
+        ...(texture ? { map: texture } : {}),
+      });
+      const mesh = new THREE.Mesh(geometry, material);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.y = floorElevation + 0.01;
       mesh.userData.selectionId = room.id;
@@ -382,8 +437,11 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
         mesh.geometry?.dispose();
-        if (Array.isArray(mesh.material)) mesh.material.forEach((material) => material.dispose());
-        else if (mesh.material) mesh.material.dispose();
+        const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+        materials.forEach((material) => {
+          if (material instanceof THREE.MeshStandardMaterial) material.map?.dispose();
+          material.dispose();
+        });
       });
       renderer.dispose();
       host.replaceChildren();

@@ -7,10 +7,11 @@ import {
 import {
   addFurniture, addRoomHole, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
-  removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening,
+  removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomFloorFinishMapping,
   findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
-import type { DesignProject, Point, ToolMode } from './domain/types';
+import type { DesignProject, FloorFinishMapping, Point, ToolMode } from './domain/types';
+import { floorFinishForRoom } from './domain/floor-finish';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './export/deliverables';
 import { reconstructRoomsFromWalls } from './domain/room-reconstruction';
 import { PlanCanvas } from './components/PlanCanvas';
@@ -83,6 +84,7 @@ export default function App() {
   const selectedOpening = visibleProject.wallOpenings.find((item) => item.id === selectedId) ?? null;
   const area = useMemo(() => visibleProject.rooms.reduce((sum, room) => sum + roomArea(room), 0), [visibleProject.rooms]);
   const selectedMaterial = selectedRoom ? project.materials.find((item) => item.id === selectedRoom.floorMaterialId) : null;
+  const selectedFloorFinish = selectedRoom ? floorFinishForRoom(selectedRoom) : null;
   const lengthUnit = project.units;
   const areaUnit = project.units === 'ft' ? 'ft²' : 'm²';
   const metresToProjectUnits = project.units === 'ft' ? 1 / 0.3048 : 1;
@@ -290,6 +292,16 @@ export default function App() {
     if (!room) { notify('Create a room first'); return; }
     commit(assignRoomMaterial(project, room.id, materialId));
     setSelectedId(room.id);
+  }
+  function editSelectedRoomFloorFinish(changes: Partial<FloorFinishMapping>): boolean {
+    if (!selectedRoom) return false;
+    try {
+      commit(updateRoomFloorFinishMapping(project, selectedRoom.id, changes));
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not update the floor finish mapping');
+      return false;
+    }
   }
   function exportProject() {
     const blob = new Blob([JSON.stringify({ ...project, activeLevelId }, null, 2)], { type: 'application/json' });
@@ -632,6 +644,17 @@ export default function App() {
               <label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} ${areaUnit}`} /></label>
               <label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label>
             </section>
+            <section className="floor-finish-mapping"><h3>Floor finish mapping</h3>
+              <label className="mapping-select-label">Pattern<select className="mapping-select" value={selectedFloorFinish?.pattern ?? 'none'} onChange={(event) => editSelectedRoomFloorFinish({ pattern: event.target.value as FloorFinishMapping['pattern'] })}>
+                <option value="none">No pattern</option><option value="wood">Wood planks</option><option value="tile">Square tile</option>
+              </select></label>
+              <label className="ceiling-toggle"><input type="checkbox" checked={selectedFloorFinish?.colorOverlay ?? false} onChange={(event) => editSelectedRoomFloorFinish({ colorOverlay: event.target.checked })} />Color overlay</label>
+              <NumericField label="Rotation" value={selectedFloorFinish?.rotation ?? 0} unit="°" min={-180} max={180} step={1} onCommit={(value) => editSelectedRoomFloorFinish({ rotation: value })} />
+              <NumericField label="Horizontal move" value={selectedFloorFinish?.offsetX ?? 0} unit={lengthUnit} min={-1_000_000} max={1_000_000} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedRoomFloorFinish({ offsetX: value })} />
+              <NumericField label="Vertical move" value={selectedFloorFinish?.offsetY ?? 0} unit={lengthUnit} min={-1_000_000} max={1_000_000} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedRoomFloorFinish({ offsetY: value })} />
+              <NumericField label="Scale X" value={selectedFloorFinish?.scaleX ?? 1} unit="×" min={0.05} max={20} step={0.1} onCommit={(value) => editSelectedRoomFloorFinish({ scaleX: value })} />
+              <NumericField label="Scale Y" value={selectedFloorFinish?.scaleY ?? 1} unit="×" min={0.05} max={20} step={0.1} onCommit={(value) => editSelectedRoomFloorFinish({ scaleY: value })} />
+            </section>
             <section><h3>Room options</h3>
               <label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label>
               <button className="rotate-btn" title="Trace an interior floor void; Undo is available" onClick={() => { setView('plan'); setTool('hole'); }}>Draw floor opening</button>
@@ -783,11 +806,12 @@ function MapPreview({ project, view, onSet3d, onSet2d, onSelectRoom }: { project
   </div>;
 }
 
-function NumericField({ label, value, unit, min, step, onCommit }: {
+function NumericField({ label, value, unit, min, max, step, onCommit }: {
   label: string;
   value: number;
   unit: string;
   min?: number;
+  max?: number;
   step: number;
   onCommit: (value: number) => void | boolean;
 }) {
@@ -798,11 +822,11 @@ function NumericField({ label, value, unit, min, step, onCommit }: {
   }, [value]);
   const commitDraft = () => {
     const next = Number(draft);
-    if (draft.trim() && Number.isFinite(next) && (min === undefined || next >= min)) {
+    if (draft.trim() && Number.isFinite(next) && (min === undefined || next >= min) && (max === undefined || next <= max)) {
       if (!Object.is(next, value) && onCommit(next) === false) setDraft(String(value));
     } else {
       setDraft(String(value));
     }
   };
-  return <label>{label}<div className="unit-input"><input ref={inputRef} type="number" value={draft} min={min} step={step} onChange={(event) => setDraft(event.target.value)} onBlur={commitDraft} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { setDraft(String(value)); event.currentTarget.blur(); } }} /><span>{unit}</span></div></label>;
+  return <label>{label}<div className="unit-input"><input ref={inputRef} type="number" value={draft} min={min} max={max} step={step} onChange={(event) => setDraft(event.target.value)} onBlur={commitDraft} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { setDraft(String(value)); event.currentTarget.blur(); } }} /><span>{unit}</span></div></label>;
 }

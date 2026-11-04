@@ -1,6 +1,6 @@
 import { DOMParser } from '@xmldom/xmldom';
 import { describe, expect, it } from 'vitest';
-import { addFurniture, addLevel, addWallOpening, createPolygonRoomWithHoles, createStarterProject, normalizeProject } from '../domain/model';
+import { addFurniture, addLevel, addWallOpening, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateRoomFloorFinishMapping } from '../domain/model';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './deliverables';
 
 const chair = {
@@ -77,6 +77,25 @@ describe('independent project deliverables', () => {
     expect(elements('text').some((element) => element.textContent === 'Living Room · 5.20 m²')).toBe(true);
     expect(svg).not.toContain('\u0000');
     expect(() => exportPlanSvg(project, 'missing-floor')).toThrow(/unknown level/);
+  });
+
+  it('exports floor finish patterns and metric transform metadata for imperial rooms', () => {
+    const base = createStarterProject('imperial-finish', 'Mapped Floor', 'ft');
+    const project = updateRoomFloorFinishMapping(base, 'room-starter', {
+      pattern: 'wood', colorOverlay: true, rotation: 30, offsetX: 2, offsetY: -1, scaleX: 1.5, scaleY: 0.75,
+    });
+    const svg = exportPlanSvg(project);
+    const document = new DOMParser().parseFromString(svg, 'image/svg+xml');
+    const ns = 'http://www.w3.org/2000/svg';
+    const patterns = Array.from(document.getElementsByTagNameNS(ns, 'pattern'));
+    const room = Array.from(document.getElementsByTagNameNS(ns, 'path')).find((element) => element.getAttribute('id') === 'room-starter');
+    expect(patterns).toHaveLength(1);
+    expect(patterns[0].getAttribute('patternTransform')).toBe('translate(0.6096 -0.3048) rotate(30)');
+    expect(patterns[0].getAttribute('width')).toBe('0.9');
+    expect(room?.getAttribute('fill')).toBe(`url(#${patterns[0].getAttribute('id')})`);
+    expect(room?.getAttribute('data-floor-offset-x-m')).toBe('0.6096');
+    expect(room?.getAttribute('data-floor-offset-y-m')).toBe('-0.3048');
+    expect(room?.getAttribute('data-floor-scale-y')).toBe('0.75');
   });
 
   it('exports all levels and quantities as escaped, parseable CSV with consistent 19-column metric rows', () => {

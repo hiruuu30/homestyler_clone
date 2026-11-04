@@ -1,5 +1,6 @@
 import { roomArea } from '../domain/model';
 import type { DesignProject, FurnitureInstance, Point, Room, Wall } from '../domain/types';
+import { floorFinishForRoom, floorPatternSpec, floorPatternSvgMarkup } from '../domain/floor-finish';
 
 type Bounds = { minX: number; minY: number; width: number; height: number };
 
@@ -140,6 +141,9 @@ function selectedFloor(project: DesignProject, levelId: string) {
     ...room,
     points: room.points.map(scalePoint),
     ...(room.holes === undefined ? {} : { holes: room.holes.map((hole) => hole.map(scalePoint)) }),
+    ...(room.floorFinish === undefined ? {} : {
+      floorFinish: { ...room.floorFinish, offsetX: room.floorFinish.offsetX * factor, offsetY: room.floorFinish.offsetY * factor },
+    }),
   }));
   const walls = project.walls.filter((wall) => wall.levelId === levelId).map((wall) => ({
     ...wall,
@@ -177,17 +181,26 @@ export function exportPlanSvg(project: DesignProject, levelId = project.activeLe
   const level = project.levels.find((item) => item.id === levelId);
   if (!level) throw new RangeError(`unknown level: ${levelId}`);
   const { rooms, walls, openings, furniture, bounds } = selectedFloor(project, levelId);
+  const floorPatterns = rooms.flatMap((room) => {
+    const color = materialColor(project, room.floorMaterialId, '#eee9df');
+    const spec = floorPatternSpec(room.id, floorFinishForRoom(room), color, 'm');
+    return spec ? [floorPatternSvgMarkup(spec)] : [];
+  });
   const parts: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${Math.ceil(bounds.width * 1000)}mm" height="${Math.ceil(bounds.height * 1000)}mm" viewBox="${number(bounds.minX)} ${number(bounds.minY)} ${number(bounds.width)} ${number(bounds.height)}" role="img" aria-labelledby="title description" data-units="m">`,
     `<title id="title">${xml(project.name)} — ${xml(level.name)} floor plan</title>`,
     `<desc id="description">Editable vector floor plan. Coordinates and dimensions are in metres.</desc>`,
     `<rect x="${number(bounds.minX)}" y="${number(bounds.minY)}" width="${number(bounds.width)}" height="${number(bounds.height)}" fill="#ffffff"/>`,
+    ...(floorPatterns.length ? [`<defs>${floorPatterns.join('')}</defs>`] : []),
     '<g class="rooms" stroke="#737981" stroke-width="0.025">',
   ];
   for (const room of rooms) {
-    const fill = materialColor(project, room.floorMaterialId, '#eee9df');
-    parts.push(`<path id="${xml(room.id)}" data-kind="room" data-area-m2="${number(roomArea(room))}" d="${roomPath(room)}" fill="${fill}" fill-opacity="0.62" fill-rule="evenodd"/>`);
+    const mapping = floorFinishForRoom(room);
+    const color = materialColor(project, room.floorMaterialId, '#eee9df');
+    const spec = floorPatternSpec(room.id, mapping, color, 'm');
+    const fill = spec ? `url(#${spec.id})` : color;
+    parts.push(`<path id="${xml(room.id)}" data-kind="room" data-area-m2="${number(roomArea(room))}" data-floor-pattern="${mapping.pattern}" data-floor-rotation-deg="${number(mapping.rotation)}" data-floor-offset-x-m="${number(mapping.offsetX)}" data-floor-offset-y-m="${number(mapping.offsetY)}" data-floor-scale-x="${number(mapping.scaleX)}" data-floor-scale-y="${number(mapping.scaleY)}" d="${roomPath(room)}" fill="${xml(fill)}" fill-opacity="0.62" fill-rule="evenodd"/>`);
   }
   parts.push('</g>', '<g class="walls" fill="none" stroke="#50565e" stroke-linecap="square" stroke-linejoin="round">');
   for (const wall of walls) {

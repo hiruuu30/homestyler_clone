@@ -1,5 +1,6 @@
 import type {
   DesignProject,
+  FloorFinishMapping,
   FurnitureInput,
   FurnitureInstance,
   Level,
@@ -12,6 +13,7 @@ import type {
   WallOpening,
   WallOpeningKind,
 } from './types';
+import { floorFinishForRoom, normalizeFloorFinishMapping } from './floor-finish';
 
 const DEFAULT_WALL_THICKNESS = 0.12;
 const DEFAULT_WALL_HEIGHT = 2.4;
@@ -272,6 +274,13 @@ export function convertProjectUnits(project: DesignProject, units: Units): Desig
       points: freeze(room.points.map(scalePoint)),
       ...(room.holes === undefined ? {} : {
         holes: freeze(room.holes.map((hole) => freeze(hole.map(scalePoint)))),
+      }),
+      ...(room.floorFinish === undefined ? {} : {
+        floorFinish: freeze({
+          ...room.floorFinish,
+          offsetX: scaleLength(room.floorFinish.offsetX, factor),
+          offsetY: scaleLength(room.floorFinish.offsetY, factor),
+        }),
       }),
     })),
     walls: project.walls.map((wall) => freeze({
@@ -1244,6 +1253,19 @@ export function roomArea(room: Room): number {
   return area;
 }
 
+export function updateRoomFloorFinishMapping(
+  project: DesignProject,
+  roomId: string,
+  changes: Partial<FloorFinishMapping>,
+): DesignProject {
+  const room = project.rooms.find((item) => item.id === id(roomId, 'room id'));
+  if (!room) throw new RangeError(`unknown room: ${roomId}`);
+  const floorFinish = normalizeFloorFinishMapping({ ...floorFinishForRoom(room), ...changes });
+  return copyProject(project, {
+    rooms: project.rooms.map((item) => item.id === room.id ? freeze({ ...item, floorFinish }) : item),
+  });
+}
+
 function defaultLevel(units: Units = 'm'): Level {
   return freeze({ id: DEFAULT_LEVEL_ID, name: 'Ground Floor', elevation: 0, height: DEFAULT_WALL_HEIGHT * unitScale('m', units) });
 }
@@ -1283,6 +1305,7 @@ export function normalizeProject(value: unknown): DesignProject {
       ...validated,
       levelId,
       ceilingVisible: typeof room.ceilingVisible === 'boolean' ? room.ceilingVisible : true,
+      floorFinish: normalizeFloorFinishMapping(room.floorFinish),
     });
   });
   const walls = candidate.walls.map((wall) => freeze({ ...wall, levelId: levelFor(wall) })) as Wall[];
