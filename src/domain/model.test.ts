@@ -338,6 +338,14 @@ describe('domain model', () => {
     expect(added.walls.find((wall) => wall.id === 'crossing')).toMatchObject({ start: { x: 0, y: 4 }, end: { x: 2, y: 2 }, thickness: 0.18, height: 2.8, materialId: 'glass' });
     expect(added.walls.find((wall) => wall.id === 'wall-2')).toMatchObject({ start: { x: 2, y: 2 }, end: { x: 4, y: 0 }, thickness: 0.18, height: 2.8, materialId: 'glass' });
     expect(project.walls).toEqual([host]);
+
+    const obliqueHost = createWall('oblique-host', { x: 0, y: 0 }, { x: 7, y: 5 });
+    const obliqueProject = { ...base, walls: [obliqueHost], rooms: [] };
+    const oblique = addWall(obliqueProject, createWall('oblique-crossing', { x: 0, y: 6 }, { x: 5, y: 0 }));
+    const junction = oblique.walls.find((wall) => wall.id === 'oblique-host')!.end;
+    expect(oblique.walls.find((wall) => wall.id === 'wall-1')!.start).toEqual(junction);
+    expect(oblique.walls.find((wall) => wall.id === 'oblique-crossing')!.end).toEqual(junction);
+    expect(oblique.walls.find((wall) => wall.id === 'wall-2')!.start).toEqual(junction);
   });
 
   it('keeps cross-floor and parallel disjoint walls independent, rejects overlap, and normalizes multiple crossings', () => {

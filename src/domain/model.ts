@@ -127,27 +127,27 @@ function properSegmentIntersection(
   return { fraction, otherFraction };
 }
 
-type WallCrossingCut = Readonly<{ wallId: string; fraction: number }>;
+type WallCrossingCut = Readonly<{ wallId: string; fraction: number; point: Point }>;
 
 function splitWallsAtCrossings(project: DesignProject, cuts: readonly WallCrossingCut[]): DesignProject {
-  const fractionsByWall = new Map<string, number[]>();
-  cuts.forEach(({ wallId, fraction }) => {
-    const fractions = fractionsByWall.get(wallId) ?? [];
-    fractions.push(fraction);
-    fractionsByWall.set(wallId, fractions);
+  const cutsByWall = new Map<string, WallCrossingCut[]>();
+  cuts.forEach((cut) => {
+    const wallCuts = cutsByWall.get(cut.wallId) ?? [];
+    wallCuts.push(cut);
+    cutsByWall.set(cut.wallId, wallCuts);
   });
 
   let next = project;
-  fractionsByWall.forEach((fractions, wallId) => {
-    const sorted = [...fractions].sort((left, right) => right - left);
-    const unique: number[] = [];
-    sorted.forEach((fraction) => {
-      if (!unique.some((existing) => Math.abs(existing - fraction) <= SEGMENT_PARAMETER_EPSILON)) unique.push(fraction);
+  cutsByWall.forEach((wallCuts, wallId) => {
+    const sorted = [...wallCuts].sort((left, right) => right.fraction - left.fraction);
+    const unique: WallCrossingCut[] = [];
+    sorted.forEach((cut) => {
+      if (!unique.some((existing) => Math.abs(existing.fraction - cut.fraction) <= SEGMENT_PARAMETER_EPSILON)) unique.push(cut);
     });
     let currentEndFraction = 1;
-    unique.forEach((fraction) => {
-      next = splitWall(next, wallId, fraction / currentEndFraction);
-      currentEndFraction = fraction;
+    unique.forEach((cut) => {
+      next = splitWallAtRatio(next, wallId, cut.fraction / currentEndFraction, cut.point);
+      currentEndFraction = cut.fraction;
     });
   });
   return next;
@@ -393,12 +393,17 @@ export function addWall(project: DesignProject, input: Wall): DesignProject {
   const crossings = project.walls.flatMap((candidate) => {
     if (candidate.levelId !== wall.levelId) return [];
     const intersection = properSegmentIntersection(wall.start, wall.end, candidate.start, candidate.end);
-    return intersection ? [{ hostWallId: candidate.id, hostFraction: intersection.otherFraction, wallFraction: intersection.fraction }] : [];
+    if (!intersection) return [];
+    const junction = point({
+      x: wall.start.x + (wall.end.x - wall.start.x) * intersection.fraction,
+      y: wall.start.y + (wall.end.y - wall.start.y) * intersection.fraction,
+    }, 'wall crossing');
+    return [{ hostWallId: candidate.id, hostFraction: intersection.otherFraction, wallFraction: intersection.fraction, point: junction }];
   });
   let next = copyProject(project, { walls: [...project.walls, wall] });
   const crossingCuts = [
-    ...crossings.map(({ hostWallId, hostFraction }) => ({ wallId: hostWallId, fraction: hostFraction })),
-    ...crossings.map(({ wallFraction }) => ({ wallId: wall.id, fraction: wallFraction })),
+    ...crossings.map(({ hostWallId, hostFraction, point: junction }) => ({ wallId: hostWallId, fraction: hostFraction, point: junction })),
+    ...crossings.map(({ wallFraction, point: junction }) => ({ wallId: wall.id, fraction: wallFraction, point: junction })),
   ];
   next = splitWallsAtCrossings(next, crossingCuts);
   for (const endpoint of [wall.start, wall.end]) {
@@ -842,9 +847,13 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
       if ((!changedWallIds.has(left.id) && !changedWallIds.has(right.id)) || left.levelId !== right.levelId) continue;
       const intersection = properSegmentIntersection(left.start, left.end, right.start, right.end);
       if (!intersection) continue;
+      const junction = point({
+        x: left.start.x + (left.end.x - left.start.x) * intersection.fraction,
+        y: left.start.y + (left.end.y - left.start.y) * intersection.fraction,
+      }, 'wall crossing');
       crossingCuts.push(
-        { wallId: left.id, fraction: intersection.fraction },
-        { wallId: right.id, fraction: intersection.otherFraction },
+        { wallId: left.id, fraction: intersection.fraction, point: junction },
+        { wallId: right.id, fraction: intersection.otherFraction, point: junction },
       );
     }
   }
@@ -861,15 +870,17 @@ export function setFurnitureHidden(project: DesignProject, furnitureId: string, 
   });
 }
 
-export function splitWall(project: DesignProject, wallId: string, ratio = 0.5): DesignProject {
+function splitWallAtRatio(project: DesignProject, wallId: string, ratio: number, intersectionPoint?: Point): DesignProject {
   id(wallId, 'wall id');
   if (!Number.isFinite(ratio) || ratio <= 0 || ratio >= 1) throw new RangeError('split ratio must be between zero and one');
   const wall = project.walls.find((item) => item.id === wallId);
   if (!wall) throw new RangeError(`unknown wall: ${wallId}`);
-  const splitPoint = point({
-    x: wall.start.x + (wall.end.x - wall.start.x) * ratio,
-    y: wall.start.y + (wall.end.y - wall.start.y) * ratio,
-  }, 'wall split point');
+  const splitPoint = intersectionPoint === undefined
+    ? point({
+      x: wall.start.x + (wall.end.x - wall.start.x) * ratio,
+      y: wall.start.y + (wall.end.y - wall.start.y) * ratio,
+    }, 'wall split point')
+    : point(intersectionPoint, 'wall split point');
   const usedIds = new Set(project.walls.map((item) => item.id));
   let suffix = 1;
   let secondWallId = `wall-${suffix}`;
@@ -890,6 +901,10 @@ export function splitWall(project: DesignProject, wallId: string, ratio = 0.5): 
   });
   const walls = project.walls.flatMap((item) => item.id === wallId ? [first, second] : [item]);
   return copyProject(project, { walls, wallOpenings });
+}
+
+export function splitWall(project: DesignProject, wallId: string, ratio = 0.5): DesignProject {
+  return splitWallAtRatio(project, wallId, ratio);
 }
 
 export function roomArea(room: Room): number {
