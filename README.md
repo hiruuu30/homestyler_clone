@@ -1,6 +1,6 @@
 # Independent room-planner prototype and Homestyler research
 
-**Status:** this remains an incomplete, independently authored prototype—not a complete-clone or parity claim. The last recorded production verification is the SVG/CSV export milestone; newer work is local until separately released. Original Homestyler catalog assets remain deferred.
+**Status:** code commit `cefe97e` is pushed to `hiruuu30/homestyler_clone` main. Vercel production deployment `dpl_2mRv9tFo4jzUj4XLLNmFk9k4LLUj` is READY; [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/) returns HTTP 200 and serves `index-BljEyMes.js`, byte-identical to the local build (SHA-256 `cc7ff8443139a37bcb759fb79aacbe598c0b462185faa887dedffdd003265537`). The bundle includes the project-units selector. This remains an incomplete, independently authored prototype—not a complete-clone or parity claim. Original Homestyler catalog assets remain deferred.
 
 ## Current milestone
 
