@@ -24,6 +24,7 @@ const furniture = {
   assetId: 'asset-chair',
   name: 'Generic Chair',
   position: { x: 1, y: 1 },
+  elevation: 0,
   rotation: 0,
   width: 0.6,
   depth: 0.6,
@@ -119,6 +120,23 @@ describe('domain model', () => {
 
     expect(updated.furniture[0]).toMatchObject({ position: { x: -0.5, y: 2 }, width: 1.2, rotation: 90 });
     expect(project.furniture[0]).toMatchObject({ position: { x: 1, y: 1 }, width: 0.6, rotation: 0 });
+  });
+
+  it('updates furniture elevation immutably and rejects non-finite elevation values', () => {
+    const project = addFurniture(createStarterProject(), furniture);
+    const updated = updateFurniture(project, 'chair-1', { elevation: 0.45 });
+
+    expect(updated.furniture[0].elevation).toBe(0.45);
+    expect(project.furniture[0].elevation).toBe(0);
+    expect(() => updateFurniture(project, 'chair-1', { elevation: Number.NaN })).toThrow(/finite/);
+  });
+
+  it('migrates saved furniture without an elevation field to floor level', () => {
+    const project = addFurniture(createStarterProject(), furniture);
+    const { elevation: _elevation, ...legacyFurniture } = project.furniture[0];
+    const migrated = normalizeProject({ ...project, furniture: [legacyFurniture] });
+
+    expect(migrated.furniture[0].elevation).toBe(0);
   });
 
   it('duplicates furniture with a fresh ID and a small placement offset', () => {

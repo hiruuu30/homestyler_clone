@@ -38,6 +38,7 @@ export type FurnitureInstance = Readonly<{
   assetId: string;
   name: string;
   position: Point;
+  elevation: number;
   rotation: number;
   width: number;
   depth: number;

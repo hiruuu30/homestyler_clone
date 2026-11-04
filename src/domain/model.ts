@@ -209,6 +209,7 @@ export function addFurniture(project: DesignProject, furniture: FurnitureInput):
   positive(furniture.width, 'furniture width');
   positive(furniture.depth, 'furniture depth');
   positive(furniture.height, 'furniture height');
+  if (!Number.isFinite(furniture.elevation)) throw new TypeError('furniture elevation must be finite');
   if (!Number.isFinite(furniture.rotation)) throw new TypeError('furniture rotation must be finite');
   if (!project.levels.some((level) => level.id === furniture.levelId)) throw new RangeError(`unknown level: ${furniture.levelId}`);
   const instance: FurnitureInstance = freeze({
@@ -254,12 +255,13 @@ export function moveFurniture(project: DesignProject, furnitureId: string, posit
   });
 }
 
-export type FurnitureChanges = Partial<Pick<FurnitureInstance, 'position' | 'rotation' | 'width' | 'depth' | 'height' | 'color'>>;
+export type FurnitureChanges = Partial<Pick<FurnitureInstance, 'position' | 'elevation' | 'rotation' | 'width' | 'depth' | 'height' | 'color'>>;
 
 export function updateFurniture(project: DesignProject, furnitureId: string, changes: FurnitureChanges): DesignProject {
   id(furnitureId, 'furniture id');
   if (!project.furniture.some((item) => item.id === furnitureId)) throw new RangeError(`unknown furniture: ${furnitureId}`);
   if (changes.position !== undefined) point(changes.position, 'furniture position');
+  if (changes.elevation !== undefined && !Number.isFinite(changes.elevation)) throw new TypeError('elevation must be finite');
   if (changes.rotation !== undefined && !Number.isFinite(changes.rotation)) throw new TypeError('rotation must be finite');
   if (changes.width !== undefined) positive(changes.width, 'furniture width');
   if (changes.depth !== undefined) positive(changes.depth, 'furniture depth');
@@ -338,7 +340,11 @@ export function normalizeProject(value: unknown): DesignProject {
   const levelFor = (item: { levelId?: string }) => item.levelId && knownLevels.has(item.levelId) ? item.levelId : fallbackLevelId;
   const rooms = candidate.rooms.map((room) => freeze({ ...room, levelId: levelFor(room) })) as Room[];
   const walls = candidate.walls.map((wall) => freeze({ ...wall, levelId: levelFor(wall) })) as Wall[];
-  const furniture = candidate.furniture.map((item) => freeze({ ...item, levelId: levelFor(item) })) as FurnitureInstance[];
+  const furniture = candidate.furniture.map((item) => {
+    const raw = item as Partial<FurnitureInstance>;
+    const elevation = Number.isFinite(raw.elevation) ? Number(raw.elevation) : 0;
+    return freeze({ ...item, elevation, levelId: levelFor(item) });
+  }) as FurnitureInstance[];
   const materials = candidate.materials.map((item) => copyMaterial(item as Material));
   const units = candidate.units === 'ft' ? 'ft' : 'm';
   return freeze({

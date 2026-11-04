@@ -138,6 +138,7 @@ export default function App() {
       width: 1.8,
       depth: 0.8,
       height: 0.85,
+      elevation: 0,
       color: '#b9a58e',
       levelId: activeLevelId,
       roomId: room.id,
@@ -362,6 +363,7 @@ export default function App() {
             </div></section>
           </div>}
           {selectedFurniture && <div className="properties"><section><h3>Object transform</h3>
+            <NumericField label="Elevation" value={selectedFurniture.elevation} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { elevation: value }))} />
             <NumericField label="Position X" value={selectedFurniture.position.x} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, x: value } }))} />
             <NumericField label="Position Y" value={selectedFurniture.position.y} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, y: value } }))} />
             <NumericField label="Width" value={selectedFurniture.width} unit="m" min={0.01} step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { width: value }))} />
