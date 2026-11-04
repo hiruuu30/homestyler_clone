@@ -20,6 +20,7 @@ import {
   removeFurniture,
   removeWall,
   removeWallOpening,
+  repairWallTopology,
   roomArea,
   rotateFurniture,
   setFurnitureHidden,
@@ -426,6 +427,59 @@ describe('domain model', () => {
 
     expect(() => addWall(withWindow, branch)).toThrow(/cannot split a wall through an opening/);
     expect(withWindow.walls).toHaveLength(1);
+  });
+
+  it('repairs saved X crossings, splits room-edge crossings, and is idempotent', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const branch = createWall('branch', { x: 2, y: -2 }, { x: 2, y: 3 });
+    const room = createPolygonRoom('room-legacy', 'Legacy room', [
+      { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 },
+    ]);
+    const legacy = { ...base, walls: [host, branch], rooms: [room] };
+
+    const repaired = repairWallTopology(legacy);
+    expect(repaired.walls).toHaveLength(5);
+    expect(repaired.walls.find((wall) => wall.id === 'host')?.end).toEqual({ x: 2, y: 0 });
+    expect(repaired.walls.find((wall) => wall.id === 'branch')?.end).toEqual({ x: 2, y: 0 });
+    expect(repaired.rooms[0].points).toContainEqual({ x: 2, y: 0 });
+    expect(repaired.rooms[0].points).toContainEqual({ x: 2, y: 2 });
+    expect(roomArea(repaired.rooms[0])).toBe(8);
+    expect(legacy.walls).toEqual([host, branch]);
+    expect(legacy.rooms[0].points).toHaveLength(4);
+    expect(repairWallTopology(repaired)).toBe(repaired);
+  });
+
+  it('reassigns openings during legacy T-junction repair and rejects through-opening cuts atomically', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const branch = createWall('branch', { x: 2, y: 2 }, { x: 2, y: 0 });
+    const legacy = { ...base, walls: [host, branch], rooms: [] };
+    const safeOpening = updateWallOpening(addWallOpening(legacy, 'host', 'window'), 'opening-1', { center: 3.2, width: 0.5 });
+
+    const repaired = repairWallTopology(safeOpening);
+    expect(repaired.walls).toHaveLength(3);
+    expect(repaired.wallOpenings[0]).toMatchObject({ wallId: 'wall-1', width: 0.5 });
+    expect(repaired.wallOpenings[0].center).toBeCloseTo(1.2);
+    expect(repairWallTopology(repaired)).toBe(repaired);
+
+    const throughOpening = addWallOpening(legacy, 'host', 'window');
+    expect(() => repairWallTopology(throughOpening)).toThrow(/cannot split a wall through an opening/);
+    expect(throughOpening.walls).toEqual([host, branch]);
+    expect(throughOpening.wallOpenings[0].wallId).toBe('host');
+  });
+
+  it('leaves cross-floor contacts alone and rejects ambiguous collinear overlaps without mutation', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const upstairs = createWall('upstairs', { x: 2, y: -2 }, { x: 2, y: 2 }, undefined, undefined, undefined, 'floor-upper');
+    const separateFloors = { ...base, walls: [host, upstairs], rooms: [] };
+    expect(repairWallTopology(separateFloors)).toBe(separateFloors);
+
+    const overlap = createWall('overlap', { x: 2, y: 0 }, { x: 5, y: 0 });
+    const legacyOverlap = { ...base, walls: [host, overlap], rooms: [] };
+    expect(() => repairWallTopology(legacyOverlap)).toThrow(/cannot overlap/);
+    expect(legacyOverlap.walls).toEqual([host, overlap]);
   });
 
   it('rejects a connected-node edit that collapses a room edge or invalidates a hosted opening', () => {

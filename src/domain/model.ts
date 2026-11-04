@@ -445,6 +445,109 @@ export function addWall(project: DesignProject, input: Wall): DesignProject {
   return copyProject(next, { rooms });
 }
 
+/** Normalize existing same-level wall crossings and attach matching vertices to room edges. */
+export function repairWallTopology(project: DesignProject): DesignProject {
+  const crossingCuts: WallCrossingCut[] = [];
+  const junctions: { levelId: string; point: Point }[] = [];
+  const addJunction = (levelId: string, junction: Point) => {
+    junctions.push({ levelId, point: point(junction, 'wall junction') });
+  };
+
+  for (let first = 0; first < project.walls.length; first += 1) {
+    const left = project.walls[first];
+    for (let second = first + 1; second < project.walls.length; second += 1) {
+      const right = project.walls[second];
+      if (left.levelId !== right.levelId) continue;
+      const intersection = properSegmentIntersection(left.start, left.end, right.start, right.end);
+      if (intersection) {
+        const junction = point({
+          x: left.start.x + (left.end.x - left.start.x) * intersection.fraction,
+          y: left.start.y + (left.end.y - left.start.y) * intersection.fraction,
+        }, 'wall crossing');
+        crossingCuts.push(
+          { wallId: left.id, fraction: intersection.fraction, point: junction },
+          { wallId: right.id, fraction: intersection.otherFraction, point: junction },
+        );
+        addJunction(left.levelId, junction);
+      }
+      [left.start, left.end].forEach((endpoint) => {
+        const fraction = segmentFraction(endpoint, right.start, right.end);
+        if (fraction !== null) {
+          crossingCuts.push({ wallId: right.id, fraction, point: endpoint });
+          addJunction(left.levelId, endpoint);
+        }
+      });
+      [right.start, right.end].forEach((endpoint) => {
+        const fraction = segmentFraction(endpoint, left.start, left.end);
+        if (fraction !== null) {
+          crossingCuts.push({ wallId: left.id, fraction, point: endpoint });
+          addJunction(left.levelId, endpoint);
+        }
+      });
+    }
+  }
+
+  project.walls.forEach((wall) => {
+    project.rooms.filter((room) => room.levelId === wall.levelId).forEach((room) => {
+      for (let index = 0; index < room.points.length; index += 1) {
+        const start = room.points[index];
+        const end = room.points[(index + 1) % room.points.length];
+        [wall.start, wall.end].forEach((endpoint) => {
+          if (segmentFraction(endpoint, start, end) !== null) addJunction(wall.levelId, endpoint);
+        });
+        [start, end].forEach((vertex) => {
+          const fraction = segmentFraction(vertex, wall.start, wall.end);
+          if (fraction !== null) {
+            crossingCuts.push({ wallId: wall.id, fraction, point: vertex });
+            addJunction(wall.levelId, vertex);
+          }
+        });
+        try {
+          const intersection = properSegmentIntersection(wall.start, wall.end, start, end);
+          if (intersection) {
+            const junction = point({
+              x: wall.start.x + (wall.end.x - wall.start.x) * intersection.fraction,
+              y: wall.start.y + (wall.end.y - wall.start.y) * intersection.fraction,
+            }, 'room boundary crossing');
+            crossingCuts.push({ wallId: wall.id, fraction: intersection.fraction, point: junction });
+            addJunction(wall.levelId, junction);
+          }
+        } catch (error) {
+          if (!(error instanceof RangeError) || !/new wall cannot overlap an existing wall/.test(error.message)) throw error;
+          // A wall may legitimately share a collinear room edge; that is not a crossing to repair.
+        }
+      }
+    });
+  });
+
+  const next = splitWallsAtCrossings(project, crossingCuts);
+  const uniqueJunctions = [...new Map(junctions.map((item) => [
+    JSON.stringify([item.levelId, item.point.x, item.point.y]), item,
+  ])).values()];
+  let changedRooms = false;
+  const rooms = next.rooms.map((room) => {
+    const targets = uniqueJunctions.filter((item) => item.levelId === room.levelId
+      && !room.points.some((vertex) => vertex.x === item.point.x && vertex.y === item.point.y));
+    const expanded: Point[] = [];
+    for (let index = 0; index < room.points.length; index += 1) {
+      const start = room.points[index];
+      const end = room.points[(index + 1) % room.points.length];
+      expanded.push(start);
+      targets
+        .map((item) => ({ point: item.point, fraction: segmentFraction(item.point, start, end) }))
+        .filter((item): item is { point: Point; fraction: number } => item.fraction !== null)
+        .sort((left, right) => left.fraction - right.fraction)
+        .forEach((item) => expanded.push(item.point));
+    }
+    if (expanded.length === room.points.length) return room;
+    changedRooms = true;
+    const validated = createPolygonRoom(room.id, room.name, expanded, room.floorMaterialId, room.levelId, project.units);
+    return freeze({ ...room, points: validated.points });
+  });
+  if (next === project && !changedRooms) return project;
+  return copyProject(next, changedRooms ? { rooms } : {});
+}
+
 export function addWallOpening(project: DesignProject, wallId: string, kind: WallOpeningKind): DesignProject {
   id(wallId, 'wall id');
   if (kind !== 'door' && kind !== 'window') throw new TypeError('opening kind must be door or window');

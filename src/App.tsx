@@ -8,7 +8,7 @@ import {
   addFurniture, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removePlanUnderlay, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening,
-  updateWallEndpoints, updateWallHeight, updateWallThickness,
+  repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './export/deliverables';
@@ -358,6 +358,16 @@ export default function App() {
       return false;
     }
   }
+  function repairExistingWallJunctions() {
+    try {
+      const next = repairWallTopology(project);
+      if (next === project) { notify('No wall junctions need repair'); return; }
+      commit(next);
+      notify('Existing wall junctions repaired · Undo to restore');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not repair existing wall junctions');
+    }
+  }
   function changeUnits(units: 'm' | 'ft') {
     if (units === project.units) return;
     commit(convertProjectUnits(project, units));
@@ -491,6 +501,7 @@ export default function App() {
               <button className={`build-reference-tool${tool === 'polygon' ? ' active' : ''}`} onClick={() => { setView('plan'); setTool('polygon'); }}><span><PenTool size={27} /></span><div>Draw custom room</div></button>
               <button className="build-reference-tool" disabled title="Outside area is not implemented"><span><Maximize2 size={27} /></span><span className="build-reference-label">Outside area</span></button>
             </div>
+            <button className="action-row" title="Connect existing same-floor X/T junctions and matching room edges; undo is available" onClick={repairExistingWallJunctions}><Grid2X2 size={16} />Repair wall junctions</button>
             <span className="section-label build-section">Door and window</span>
             <div className="build-reference-grid build-muted-grid build-door-tools">
               <button className="build-reference-tool" onClick={() => createSelectedWallOpening('door')} title="Select a wall first"><span><Square size={27} /></span><div>Single door</div></button>
