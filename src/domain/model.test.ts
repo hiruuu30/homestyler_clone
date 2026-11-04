@@ -270,6 +270,19 @@ describe('domain model', () => {
     expect(project.rooms.find((room) => room.id === 'room-starter')?.points).toContainEqual({ x: 6.2, y: -0.5 });
   });
 
+  it('splits a moved wall when a stationary host endpoint lands in its interior', () => {
+    const base = createStarterProject();
+    const stub = createWall('stub', { x: 2, y: 0 }, { x: 2, y: 2 });
+    const diagonal = createWall('diagonal', { x: 0, y: -1 }, { x: 4, y: -1 });
+    const project = { ...base, walls: [stub, diagonal], rooms: [] };
+    const moved = updateWallEndpoints(project, 'diagonal', { end: { x: 4, y: 1 } });
+
+    expect(moved.walls).toHaveLength(3);
+    expect(moved.walls.find((wall) => wall.id === 'diagonal')).toMatchObject({ start: { x: 0, y: -1 }, end: { x: 2, y: 0 } });
+    expect(moved.walls.find((wall) => wall.id === 'wall-1')).toMatchObject({ start: { x: 2, y: 0 }, end: { x: 4, y: 1 } });
+    expect(moved.walls.find((wall) => wall.id === 'stub')?.start).toEqual({ x: 2, y: 0 });
+  });
+
   it('splits a wall and inserts a room vertex when an edited endpoint lands on an edge', () => {
     const base = createStarterProject();
     const boundary = createWall('boundary', { x: 0, y: 0 }, { x: 4, y: 0 });
@@ -346,6 +359,19 @@ describe('domain model', () => {
     expect(oblique.walls.find((wall) => wall.id === 'wall-1')!.start).toEqual(junction);
     expect(oblique.walls.find((wall) => wall.id === 'oblique-crossing')!.end).toEqual(junction);
     expect(oblique.walls.find((wall) => wall.id === 'wall-2')!.start).toEqual(junction);
+  });
+
+  it('splits a newly added wall when an existing wall endpoint lands in its interior', () => {
+    const base = createStarterProject();
+    const stub = createWall('stub', { x: 2, y: 0 }, { x: 2, y: 2 });
+    const project = { ...base, walls: [stub], rooms: [] };
+    const added = addWall(project, createWall('boundary', { x: 0, y: 0 }, { x: 4, y: 0 }));
+
+    expect(added.walls).toHaveLength(3);
+    expect(added.walls.find((wall) => wall.id === 'boundary')).toMatchObject({ start: { x: 0, y: 0 }, end: { x: 2, y: 0 } });
+    expect(added.walls.find((wall) => wall.id === 'wall-1')).toMatchObject({ start: { x: 2, y: 0 }, end: { x: 4, y: 0 } });
+    expect(added.walls.find((wall) => wall.id === 'stub')?.start).toEqual({ x: 2, y: 0 });
+    expect(project.walls).toEqual([stub]);
   });
 
   it('keeps cross-floor and parallel disjoint walls independent, rejects overlap, and normalizes multiple crossings', () => {

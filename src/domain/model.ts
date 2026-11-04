@@ -405,6 +405,12 @@ export function addWall(project: DesignProject, input: Wall): DesignProject {
     ...crossings.map(({ hostWallId, hostFraction, point: junction }) => ({ wallId: hostWallId, fraction: hostFraction, point: junction })),
     ...crossings.map(({ wallFraction, point: junction }) => ({ wallId: wall.id, fraction: wallFraction, point: junction })),
   ];
+  project.walls.filter((candidate) => candidate.levelId === wall.levelId).forEach((candidate) => {
+    [candidate.start, candidate.end].forEach((junction) => {
+      const fraction = segmentFraction(junction, wall.start, wall.end);
+      if (fraction !== null) crossingCuts.push({ wallId: wall.id, fraction, point: junction });
+    });
+  });
   next = splitWallsAtCrossings(next, crossingCuts);
   for (const endpoint of [wall.start, wall.end]) {
     while (true) {
@@ -840,6 +846,14 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
   });
   let next = copyProject(project, { walls, wallOpenings, rooms });
   const crossingCuts: WallCrossingCut[] = [];
+  walls.filter((candidate) => changedWallIds.has(candidate.id)).forEach((movedWall) => {
+    walls.filter((candidate) => candidate.id !== movedWall.id && candidate.levelId === movedWall.levelId).forEach((candidate) => {
+      [candidate.start, candidate.end].forEach((junction) => {
+        const fraction = segmentFraction(junction, movedWall.start, movedWall.end);
+        if (fraction !== null) crossingCuts.push({ wallId: movedWall.id, fraction, point: junction });
+      });
+    });
+  });
   for (let first = 0; first < walls.length; first += 1) {
     for (let second = first + 1; second < walls.length; second += 1) {
       const left = walls[first];
