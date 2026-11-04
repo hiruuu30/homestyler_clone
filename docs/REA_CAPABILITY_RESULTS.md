@@ -2,7 +2,7 @@
 
 ## Bottom line
 
-REA 6.8.0 is installed and callable in the sandbox. CLI diagnostics and a bounded static JavaScript analysis worked. The original managed Homestyler browser remains not externally attachable, but a separate fresh Chrome profile was manually authenticated and successfully inspected through an explicit loopback CDP port. The sanitized authenticated result contains only generic DOM/accessibility counts, controls, versions, origins and evidence IDs; it is not exhaustive editor or backend recovery.
+REA 6.8.0 is installed and callable in the sandbox; these results are historical for the tooling path. The newer bounded visual capture/comparison is documented in [PingFusi capability results](PINGFUSI_CAPABILITY_RESULTS.md). CLI diagnostics and a bounded static JavaScript analysis worked. The original managed Homestyler browser remains not externally attachable, but a separate fresh Chrome profile was manually authenticated and successfully inspected through an explicit loopback CDP port. The sanitized authenticated result contains only generic DOM/accessibility counts, controls, versions, origins and evidence IDs; it is not exhaustive editor or backend recovery.
 
 ## Environment and installation
 
