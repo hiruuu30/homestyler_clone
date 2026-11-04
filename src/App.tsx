@@ -12,6 +12,7 @@ import {
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './export/deliverables';
+import { reconstructRoomsFromWalls } from './domain/room-reconstruction';
 import { PlanCanvas } from './components/PlanCanvas';
 const SceneViewport = lazy(() => import('./components/SceneViewport'));
 
@@ -378,6 +379,17 @@ export default function App() {
       notify(error instanceof Error ? error.message : 'Could not repair existing wall junctions');
     }
   }
+  function createRoomsFromClosedWalls() {
+    try {
+      const next = reconstructRoomsFromWalls(project);
+      const count = next.rooms.length - project.rooms.length;
+      if (count <= 0) { notify('No new closed wall loops found'); return; }
+      commit(next);
+      notify(`${count} room${count === 1 ? '' : 's'} reconstructed · Undo to restore`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not reconstruct rooms from these walls');
+    }
+  }
   function changeUnits(units: 'm' | 'ft') {
     if (units === project.units) return;
     commit(convertProjectUnits(project, units));
@@ -512,6 +524,7 @@ export default function App() {
               <button className="build-reference-tool" disabled title="Outside area is not implemented"><span><Maximize2 size={27} /></span><span className="build-reference-label">Outside area</span></button>
             </div>
             <button className="action-row" title="Connect existing same-floor X/T junctions and matching room edges; undo is available" onClick={repairExistingWallJunctions}><Grid2X2 size={16} />Repair wall junctions</button>
+            <button className="action-row" title="Create missing rooms inside closed wall loops on every floor; existing rooms are preserved. Repair wall crossings first." onClick={createRoomsFromClosedWalls}><Grid2X2 size={16} />Reconstruct rooms</button>
             <span className="section-label build-section">Door and window</span>
             <div className="build-reference-grid build-muted-grid build-door-tools">
               <button className="build-reference-tool" onClick={() => createSelectedWallOpening('door')} title="Select a wall first"><span><Square size={27} /></span><div>Single door</div></button>
