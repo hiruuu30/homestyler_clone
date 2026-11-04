@@ -5,9 +5,9 @@ import {
   Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
-  addFurniture, arrayFurniture, assignRoomMaterial, createRectRoom, createStarterProject, duplicateFurniture,
+  addFurniture, addWallOpening, arrayFurniture, assignRoomMaterial, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
-  removeLevel as removeProjectLevel, removeWall, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture,
+  removeLevel as removeProjectLevel, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updateWallOpening,
   updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
@@ -70,10 +70,12 @@ export default function App() {
     rooms: project.rooms.filter((item) => item.levelId === activeLevelId),
     walls: project.walls.filter((item) => item.levelId === activeLevelId),
     furniture: project.furniture.filter((item) => item.levelId === activeLevelId),
+    wallOpenings: project.wallOpenings.filter((opening) => project.walls.some((wall) => wall.id === opening.wallId && wall.levelId === activeLevelId)),
   }), [project, activeLevelId]);
   const selectedRoom = visibleProject.rooms.find((item) => item.id === selectedId) ?? null;
   const selectedWall = visibleProject.walls.find((item) => item.id === selectedId) ?? null;
   const selectedFurniture = visibleProject.furniture.find((item) => item.id === selectedId) ?? null;
+  const selectedOpening = visibleProject.wallOpenings.find((item) => item.id === selectedId) ?? null;
   const area = useMemo(() => visibleProject.rooms.reduce((sum, room) => sum + roomArea(room), 0), [visibleProject.rooms]);
   const selectedMaterial = selectedRoom ? project.materials.find((item) => item.id === selectedRoom.floorMaterialId) : null;
 
@@ -94,6 +96,7 @@ export default function App() {
     setSelectedId((currentId) => currentId && [
       ...previous.rooms.map((item) => item.id),
       ...previous.walls.map((item) => item.id),
+      ...previous.wallOpenings.map((item) => item.id),
       ...previous.furniture.map((item) => item.id),
     ].includes(currentId) ? currentId : null);
     setSaved(false);
@@ -196,6 +199,7 @@ export default function App() {
   function deleteSelected() {
     if (selectedFurniture) commit(removeFurniture(project, selectedFurniture.id));
     else if (selectedWall) commit(removeWall(project, selectedWall.id));
+    else if (selectedOpening) commit(removeWallOpening(project, selectedOpening.id));
     else return;
     setSelectedId(null);
   }
@@ -203,6 +207,23 @@ export default function App() {
     if (!selectedWall) return;
     commit(splitProjectWall(project, selectedWall.id));
     notify('Wall split at midpoint · Undo to restore');
+  }
+  function createSelectedWallOpening(kind: 'door' | 'window') {
+    if (!selectedWall) { notify('Select a wall first, then add its door or window'); return; }
+    try {
+      const next = addWallOpening(project, selectedWall.id, kind);
+      commit(next);
+      setSelectedId(next.wallOpenings.at(-1)?.id ?? null);
+      setView('plan');
+      notify(`${kind === 'door' ? 'Door' : 'Window'} opening added · Undo to restore`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not add an opening to this wall');
+    }
+  }
+  function editSelectedOpening(changes: Parameters<typeof updateWallOpening>[2]) {
+    if (!selectedOpening) return;
+    try { commit(updateWallOpening(project, selectedOpening.id, changes)); }
+    catch (error) { notify(error instanceof Error ? error.message : 'Could not update this opening'); }
   }
   function applyMaterial(materialId: string) {
     const room = selectedRoom ?? visibleProject.rooms[0];
@@ -267,7 +288,7 @@ export default function App() {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); }
       else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); redo(); }
       else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd' && selectedFurniture) { event.preventDefault(); duplicateSelectedFurniture(); }
-      else if ((event.key === 'Delete' || event.key === 'Backspace') && (selectedFurniture || selectedWall)) { event.preventDefault(); deleteSelected(); }
+      else if ((event.key === 'Delete' || event.key === 'Backspace') && (selectedFurniture || selectedWall || selectedOpening)) { event.preventDefault(); deleteSelected(); }
       else if (event.code === 'Space' && selectedFurniture) { event.preventDefault(); rotateSelected(); }
     };
     window.addEventListener('keydown', onKey);
@@ -318,15 +339,15 @@ export default function App() {
             </div>
             <span className="section-label build-section">Door and window</span>
             <div className="build-reference-grid build-muted-grid build-door-tools">
-              <button className="build-reference-tool" disabled><span><Square size={27} /></span><div>Single door</div></button>
-              <button className="build-reference-tool" disabled><span><Square size={27} /></span><div>Window</div></button>
+              <button className="build-reference-tool" onClick={() => createSelectedWallOpening('door')} title="Select a wall first"><span><Square size={27} /></span><div>Single door</div></button>
+              <button className="build-reference-tool" onClick={() => createSelectedWallOpening('window')} title="Select a wall first"><span><Square size={27} /></span><div>Window</div></button>
               <button className="build-reference-tool" disabled><span><Square size={27} /></span><div>Corner bay window</div></button>
             </div>
             <span className="section-label build-section">Structure</span>
             <div className="build-reference-grid build-muted-grid build-structure-tools">
               <button className="build-reference-tool" disabled><span><Building2 size={27} /></span><div>Auto add roof</div></button>
               <button className="build-reference-tool" disabled><span><Layers3 size={27} /></span><div>Stair</div></button>
-              <button className="build-reference-tool" disabled><span><Square size={27} /></span><span className="build-reference-label">Door opening</span></button>
+              <button className="build-reference-tool" onClick={() => createSelectedWallOpening('door')} title="Select a wall first"><span><Square size={27} /></span><span className="build-reference-label">Door opening</span></button>
             </div>
             <div className="section-label">FLOORS</div>
             <div className="level-list">{project.levels.map((level) => <div key={level.id} className={`level-row${level.id === activeLevelId ? ' active' : ''}`}>
@@ -335,7 +356,7 @@ export default function App() {
             </div>)}</div>
             <button className="action-row add-level" onClick={addLevel}><Plus size={15} />Add floor</button>
             <div className="section-label">ADVANCED TOOLS</div>
-            <button className="locked-row" disabled><Plus size={16} /><span>Doors and windows</span><small>Not implemented</small></button>
+            <button className="locked-row" disabled><Plus size={16} /><span>Advanced openings</span><small>Not implemented</small></button>
             <p className="disclaimer">This is an early independent implementation; full feature and pixel parity have not been verified.</p>
           </div></div>}
           {panel === 'furniture' && <div className="panel-scroll">
@@ -353,7 +374,7 @@ export default function App() {
             <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
           </div>}
           {panel === 'project' && <div className="panel-scroll">
-            <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects</p><p>{area.toFixed(2)} m² on {activeLevel.name}</p></div>
+            <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects · {project.wallOpenings.length} openings</p><p>{area.toFixed(2)} m² on {activeLevel.name}</p></div>
             <button className="action-row" onClick={newDesign}><FilePlus2 size={16} />New design</button>
             <button className="action-row" onClick={() => importRef.current?.click()}><Upload size={16} />Import RoomLab JSON</button>
             <button className="action-row" onClick={exportProject}><Download size={16} />Export RoomLab JSON</button>
@@ -391,8 +412,8 @@ export default function App() {
               if (visibleProject.rooms.some((room) => room.id === roomId)) setSelectedId(roomId);
             }}
           /></div>
-          <div className={`inspector-head${selectedWall ? ' wall-selected' : ''}`}>{!selectedWall && <small>PROPERTIES</small>}<h2>{selectedWall ? 'Layer settings' : selectedRoom?.name ?? (selectedFurniture?.name ?? 'Design summary')}</h2></div>
-          {!selectedRoom && !selectedWall && !selectedFurniture && <div className="summary"><Building2 size={27} /><p>{activeLevel.name} · select a room, wall, or furniture object.</p><div><span>Rooms</span><b>{visibleProject.rooms.length}</b></div><div><span>Floor area</span><b>{area.toFixed(2)} m²</b></div><div><span>Furniture</span><b>{visibleProject.furniture.length}</b></div></div>}
+          <div className={`inspector-head${selectedWall ? ' wall-selected' : ''}`}>{!selectedWall && <small>PROPERTIES</small>}<h2>{selectedWall ? 'Layer settings' : selectedRoom?.name ?? selectedFurniture?.name ?? (selectedOpening ? `${selectedOpening.kind === 'door' ? 'Door' : 'Window'} opening` : 'Design summary')}</h2></div>
+          {!selectedRoom && !selectedWall && !selectedFurniture && !selectedOpening && <div className="summary"><Building2 size={27} /><p>{activeLevel.name} · select a room, wall, furniture object or opening.</p><div><span>Rooms</span><b>{visibleProject.rooms.length}</b></div><div><span>Floor area</span><b>{area.toFixed(2)} m²</b></div><div><span>Furniture</span><b>{visibleProject.furniture.length}</b></div></div>}
           {selectedRoom && <div className="properties"><section><h3>Room settings</h3><label>Room name<input value={selectedRoom.name} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, name: event.target.value } : room) })} /></label><label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} m²`} /></label><label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label></section><section><h3>Room options</h3><label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label></section></div>}
           {selectedWall && <div className="properties wall-properties">
             <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} m²</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
@@ -408,6 +429,14 @@ export default function App() {
               <button className="rotate-btn danger-action wall-delete" onClick={deleteSelected}><Trash2 size={14} /> Delete wall</button>
             </div></section>
           </div>}
+          {selectedOpening && <div className="properties"><section><h3>{selectedOpening.kind === 'door' ? 'Door' : 'Window'} opening</h3>
+            <NumericField label="Along wall" value={selectedOpening.center} unit="m" min={selectedOpening.width / 2} step={0.05} onCommit={(value) => editSelectedOpening({ center: value })} />
+            <NumericField label="Width" value={selectedOpening.width} unit="m" min={0.2} step={0.05} onCommit={(value) => editSelectedOpening({ width: value })} />
+            <NumericField label="Height" value={selectedOpening.height} unit="m" min={0.1} step={0.05} onCommit={(value) => editSelectedOpening({ height: value })} />
+            {selectedOpening.kind === 'window' && <NumericField label="Sill height" value={selectedOpening.sillHeight} unit="m" min={0} step={0.05} onCommit={(value) => editSelectedOpening({ sillHeight: value })} />}
+            <button className="rotate-btn" onClick={() => setSelectedId(selectedOpening.wallId)}><Building2 size={14} /> Select host wall</button>
+            <button className="rotate-btn danger-action" onClick={deleteSelected}><Trash2 size={14} /> Delete opening</button>
+          </section></div>}
           {selectedFurniture && <div className="properties"><section><h3>Object transform</h3>
             <NumericField label="Elevation" value={selectedFurniture.elevation} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { elevation: value }))} />
             <NumericField label="Position X" value={selectedFurniture.position.x} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, x: value } }))} />

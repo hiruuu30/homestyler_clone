@@ -201,3 +201,5 @@
 .array-actions .array-apply{border-color:#2868d5;background:#2868d5;color:#fff}
 .hidden-object-row{color:#476eab}
 .hidden-empty{margin:7px 4px 12px;color:#92979e;font-size:9px}
+
+.plan-opening{cursor:pointer;fill:none;stroke:#426b83;stroke-width:.045;stroke-linecap:round;stroke-linejoin:round}.plan-opening-window{stroke:#3183a5}.plan-opening .opening-jamb{stroke:#fff;stroke-width:.075}.plan-opening.is-selected{stroke:#2468cf;stroke-width:.065}.plan-opening.is-selected .opening-jamb{stroke:#2468cf}

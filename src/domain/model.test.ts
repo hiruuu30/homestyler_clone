@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addLevel,
   addFurniture,
+  addWallOpening,
   arrayFurniture,
   assignRoomMaterial,
   createRectRoom,
@@ -13,15 +14,18 @@ import {
   removeLevel,
   removeFurniture,
   removeWall,
+  removeWallOpening,
   roomArea,
   rotateFurniture,
   setFurnitureHidden,
   splitWall,
   updateFurniture,
+  updateWallOpening,
   updateWallEndpoints,
   updateWallHeight,
   updateWallThickness,
 } from './model';
+import { wallSolidSegments } from './wall-openings';
 
 const furniture = {
   id: 'chair-1',
@@ -273,12 +277,15 @@ describe('domain model', () => {
     const project = createStarterProject();
     const second = addLevel(project);
     const room = createRectRoom('room-upper', 'Upper Room', 2, 2, { x: 0, y: 0 }, undefined, second.activeLevelId);
-    const withRoom = { ...second, rooms: [...second.rooms, room] };
-    const withoutSecond = removeLevel(withRoom, second.activeLevelId);
+    const upperWall = createWall('wall-upper', { x: 0, y: 0 }, { x: 3, y: 0 }, undefined, undefined, undefined, second.activeLevelId);
+    const withRoom = { ...second, rooms: [...second.rooms, room], walls: [...second.walls, upperWall] };
+    const withOpening = addWallOpening(withRoom, upperWall.id, 'door');
+    const withoutSecond = removeLevel(withOpening, second.activeLevelId);
 
     expect(withoutSecond.levels).toHaveLength(1);
     expect(withoutSecond.activeLevelId).toBe(project.activeLevelId);
     expect(withoutSecond.rooms.some((item) => item.id === room.id)).toBe(false);
+    expect(withoutSecond.wallOpenings).toEqual([]);
     expect(() => removeLevel(withoutSecond, withoutSecond.activeLevelId)).toThrow(/at least one floor/);
   });
 
@@ -300,5 +307,59 @@ describe('domain model', () => {
     expect(changed.walls.find((wall) => wall.id === 'wall-north')?.height).toBe(3.1);
     expect(project.walls.find((wall) => wall.id === 'wall-north')?.height).toBe(2.4);
     expect(() => updateWallHeight(project, 'wall-north', 0)).toThrow(/greater than zero/);
+  });
+
+  it('creates generic door and window openings with safe defaults and legacy projects migrate cleanly', () => {
+    const project = createStarterProject();
+    const doorProject = addWallOpening(project, 'wall-north', 'door');
+    const door = doorProject.wallOpenings[0];
+    expect(door).toMatchObject({ wallId: 'wall-north', kind: 'door', center: 1, width: 0.9, height: 2.05, sillHeight: 0 });
+    const windowProject = addWallOpening(project, 'wall-north', 'window');
+    expect(windowProject.wallOpenings[0]).toMatchObject({ kind: 'window', center: 1, width: 1.2, height: 1.2, sillHeight: 0.9 });
+    const { wallOpenings: _wallOpenings, ...legacy } = project;
+    expect(normalizeProject(legacy).wallOpenings).toEqual([]);
+    expect(normalizeProject(doorProject).wallOpenings).toEqual([door]);
+  });
+
+  it('validates opening bounds, overlap, dimensions and immutable edits', () => {
+    const project = addWallOpening(createStarterProject(), 'wall-north', 'door');
+    const door = project.wallOpenings[0];
+    const moved = updateWallOpening(project, door.id, { center: 0.5, width: 0.8 });
+    expect(moved.wallOpenings[0]).toMatchObject({ center: 0.5, width: 0.8 });
+    expect(project.wallOpenings[0]).toMatchObject({ center: 1, width: 0.9 });
+    expect(() => updateWallOpening(project, door.id, { width: 2.1 })).toThrow(/fit within the wall length/);
+    expect(() => updateWallOpening(project, door.id, { height: 2.5 })).toThrow(/fit within the wall height/);
+    expect(() => addWallOpening(project, 'wall-north', 'window')).toThrow(/cannot overlap/);
+    expect(() => addWallOpening(project, 'missing-wall', 'door')).toThrow(/unknown wall/);
+  });
+
+  it('rejects wall edits that invalidate openings and deletes hosted openings with their wall', () => {
+    const project = addWallOpening(createStarterProject(), 'wall-north', 'door');
+    expect(() => updateWallHeight(project, 'wall-north', 1.9)).toThrow(/fit within the wall height/);
+    expect(() => updateWallEndpoints(project, 'wall-north', { end: { x: 5, y: -0.5 } })).toThrow(/fit within the wall length/);
+    expect(removeWall(project, 'wall-north').wallOpenings).toEqual([]);
+    expect(removeWallOpening(project, project.wallOpenings[0].id).wallOpenings).toEqual([]);
+  });
+
+  it('moves openings to the correct child wall when split and rejects splits through openings', () => {
+    const project = addWallOpening(createStarterProject(), 'wall-north', 'door');
+    expect(() => splitWall(project, 'wall-north')).toThrow(/through an opening/);
+    const shifted = updateWallOpening(project, project.wallOpenings[0].id, { center: 1.5 });
+    const split = splitWall(shifted, 'wall-north', 0.25);
+    expect(split.wallOpenings[0]).toMatchObject({ wallId: 'wall-1', center: 1 });
+    expect(split.walls.find((wall) => wall.id === 'wall-1')?.start).toEqual({ x: 4.7, y: -0.5 });
+  });
+
+  it('decomposes walls into solid 3D regions above, below and beside openings', () => {
+    const project = addWallOpening(createStarterProject(), 'wall-north', 'window');
+    const window = project.wallOpenings[0];
+    const segments = wallSolidSegments(2, 2.4, [window]);
+    expect(segments).toEqual([
+      { start: 0, end: 0.4, bottom: 0, top: 2.4 },
+      { start: 0.4, end: 1.6, bottom: 0, top: 0.9 },
+      { start: 0.4, end: 1.6, bottom: 2.1, top: 2.4 },
+      { start: 1.6, end: 2, bottom: 0, top: 2.4 },
+    ]);
+    expect(() => wallSolidSegments(0, 2.4, [])).toThrow(/positive finite/);
   });
 });

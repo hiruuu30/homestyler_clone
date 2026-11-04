@@ -8,6 +8,8 @@ import type {
   Room,
   Units,
   Wall,
+  WallOpening,
+  WallOpeningKind,
 } from './types';
 
 const DEFAULT_WALL_THICKNESS = 0.12;
@@ -40,6 +42,34 @@ function positive(value: number, label: string): number {
   return value;
 }
 
+function validateOpening(wall: Wall, opening: Pick<WallOpening, 'center' | 'width' | 'height' | 'sillHeight'>): void {
+  const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+  if (!Number.isFinite(opening.center)) throw new TypeError('opening center must be a finite number');
+  positive(opening.width, 'opening width');
+  positive(opening.height, 'opening height');
+  if (!Number.isFinite(opening.sillHeight) || opening.sillHeight < 0) throw new RangeError('sill height must be zero or greater');
+  if (opening.center - opening.width / 2 < 0 || opening.center + opening.width / 2 > length) {
+    throw new RangeError('opening must fit within the wall length');
+  }
+  if (opening.sillHeight + opening.height > wall.height + 1e-9) {
+    throw new RangeError('opening must fit within the wall height');
+  }
+}
+
+function assertNoOpeningOverlap(openings: readonly WallOpening[], candidate: WallOpening): void {
+  const left = candidate.center - candidate.width / 2;
+  const right = candidate.center + candidate.width / 2;
+  const top = candidate.sillHeight + candidate.height;
+  for (const opening of openings) {
+    if (opening.wallId !== candidate.wallId || opening.id === candidate.id) continue;
+    const overlapsHorizontally = left < opening.center + opening.width / 2 - 1e-9
+      && right > opening.center - opening.width / 2 + 1e-9;
+    const overlapsVertically = candidate.sillHeight < opening.sillHeight + opening.height - 1e-9
+      && top > opening.sillHeight + 1e-9;
+    if (overlapsHorizontally && overlapsVertically) throw new RangeError('wall openings cannot overlap');
+  }
+}
+
 function copyMaterial(material: Material): Material {
   id(material.id, 'material id');
   id(material.name, 'material name');
@@ -56,6 +86,7 @@ function copyProject(project: DesignProject, patch: Partial<DesignProject>): Des
     levels: freeze([...(patch.levels ?? project.levels)]),
     rooms: freeze([...(patch.rooms ?? project.rooms)]),
     walls: freeze([...(patch.walls ?? project.walls)]),
+    wallOpenings: freeze([...(patch.wallOpenings ?? project.wallOpenings)]),
     furniture: freeze([...(patch.furniture ?? project.furniture)]),
     materials: freeze([...(patch.materials ?? project.materials)]),
     updatedAt: new Date().toISOString(),
@@ -115,6 +146,55 @@ export function createWall(
   return freeze({ id: wallId, start: from, end: to, thickness, height, materialId, levelId });
 }
 
+export function addWallOpening(project: DesignProject, wallId: string, kind: WallOpeningKind): DesignProject {
+  id(wallId, 'wall id');
+  if (kind !== 'door' && kind !== 'window') throw new TypeError('opening kind must be door or window');
+  const wall = project.walls.find((item) => item.id === wallId);
+  if (!wall) throw new RangeError(`unknown wall: ${wallId}`);
+  const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+  const width = kind === 'door' ? Math.min(0.9, length * 0.7) : Math.min(1.2, length * 0.7);
+  const height = kind === 'door' ? Math.min(2.05, wall.height) : Math.min(1.2, Math.max(0.1, wall.height - 0.6));
+  const sillHeight = kind === 'door' ? 0 : Math.min(0.9, wall.height - height);
+  if (width < 0.2) throw new RangeError('wall is too short for a door or window');
+  const usedIds = new Set(project.wallOpenings.map((opening) => opening.id));
+  let suffix = 1;
+  while (usedIds.has(`opening-${suffix}`)) suffix += 1;
+  const opening: WallOpening = freeze({
+    id: `opening-${suffix}`,
+    wallId,
+    kind,
+    center: length / 2,
+    width,
+    height,
+    sillHeight,
+  });
+  validateOpening(wall, opening);
+  assertNoOpeningOverlap(project.wallOpenings, opening);
+  return copyProject(project, { wallOpenings: [...project.wallOpenings, opening] });
+}
+
+export type WallOpeningChanges = Partial<Pick<WallOpening, 'center' | 'width' | 'height' | 'sillHeight'>>;
+
+export function updateWallOpening(project: DesignProject, openingId: string, changes: WallOpeningChanges): DesignProject {
+  id(openingId, 'opening id');
+  const current = project.wallOpenings.find((opening) => opening.id === openingId);
+  if (!current) throw new RangeError(`unknown opening: ${openingId}`);
+  const wall = project.walls.find((item) => item.id === current.wallId);
+  if (!wall) throw new RangeError(`opening host wall is missing: ${current.wallId}`);
+  const updated = freeze({ ...current, ...changes });
+  validateOpening(wall, updated);
+  assertNoOpeningOverlap(project.wallOpenings, updated);
+  return copyProject(project, {
+    wallOpenings: project.wallOpenings.map((opening) => opening.id === openingId ? updated : opening),
+  });
+}
+
+export function removeWallOpening(project: DesignProject, openingId: string): DesignProject {
+  id(openingId, 'opening id');
+  if (!project.wallOpenings.some((opening) => opening.id === openingId)) throw new RangeError(`unknown opening: ${openingId}`);
+  return copyProject(project, { wallOpenings: project.wallOpenings.filter((opening) => opening.id !== openingId) });
+}
+
 export function updateWallThickness(wall: Wall, thickness: number): Wall;
 export function updateWallThickness(project: DesignProject, wallId: string, thickness: number): DesignProject;
 export function updateWallThickness(
@@ -144,7 +224,11 @@ export function updateWallHeight(
   if ('walls' in subject) {
     const wallId = id(wallIdOrHeight as string, 'wall id');
     const nextHeight = positive(maybeHeight as number, 'wall height');
-    if (!subject.walls.some((wall) => wall.id === wallId)) throw new RangeError(`unknown wall: ${wallId}`);
+    const wall = subject.walls.find((item) => item.id === wallId);
+    if (!wall) throw new RangeError(`unknown wall: ${wallId}`);
+    subject.wallOpenings.filter((opening) => opening.wallId === wallId).forEach((opening) => {
+      validateOpening({ ...wall, height: nextHeight }, opening);
+    });
     return copyProject(subject, {
       walls: subject.walls.map((wall) => wall.id === wallId ? freeze({ ...wall, height: nextHeight }) : wall),
     });
@@ -177,6 +261,7 @@ export function removeLevel(project: DesignProject, levelId: string): DesignProj
     activeLevelId,
     rooms: project.rooms.filter((room) => room.levelId !== levelId),
     walls: project.walls.filter((wall) => wall.levelId !== levelId),
+    wallOpenings: project.wallOpenings.filter((opening) => project.walls.some((wall) => wall.id === opening.wallId && wall.levelId !== levelId)),
     furniture: project.furniture.filter((item) => item.levelId !== levelId),
   });
 }
@@ -329,7 +414,10 @@ export function removeFurniture(project: DesignProject, furnitureId: string): De
 export function removeWall(project: DesignProject, wallId: string): DesignProject {
   id(wallId, 'wall id');
   if (!project.walls.some((wall) => wall.id === wallId)) throw new RangeError(`unknown wall: ${wallId}`);
-  return copyProject(project, { walls: project.walls.filter((wall) => wall.id !== wallId) });
+  return copyProject(project, {
+    walls: project.walls.filter((wall) => wall.id !== wallId),
+    wallOpenings: project.wallOpenings.filter((opening) => opening.wallId !== wallId),
+  });
 }
 
 export type WallEndpointChanges = Partial<Pick<Wall, 'start' | 'end'>>;
@@ -341,8 +429,10 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
   const start = changes.start === undefined ? wall.start : point(changes.start, 'wall start');
   const end = changes.end === undefined ? wall.end : point(changes.end, 'wall end');
   if (start.x === end.x && start.y === end.y) throw new RangeError('wall endpoints must be different points');
+  const updatedWall = { ...wall, start, end };
+  project.wallOpenings.filter((opening) => opening.wallId === wallId).forEach((opening) => validateOpening(updatedWall, opening));
   return copyProject(project, {
-    walls: project.walls.map((item) => item.id === wallId ? freeze({ ...item, start, end }) : item),
+    walls: project.walls.map((item) => item.id === wallId ? freeze(updatedWall) : item),
   });
 }
 
@@ -370,8 +460,20 @@ export function splitWall(project: DesignProject, wallId: string, ratio = 0.5): 
   while (usedIds.has(secondWallId)) secondWallId = `wall-${++suffix}`;
   const first = freeze({ ...wall, end: splitPoint });
   const second = freeze({ ...wall, id: secondWallId, start: splitPoint });
+  const splitLength = Math.hypot(splitPoint.x - wall.start.x, splitPoint.y - wall.start.y);
+  const wallOpenings = project.wallOpenings.map((opening) => {
+    if (opening.wallId !== wallId) return opening;
+    const openingStart = opening.center - opening.width / 2;
+    const openingEnd = opening.center + opening.width / 2;
+    if (openingStart < splitLength && openingEnd > splitLength) {
+      throw new RangeError('cannot split a wall through an opening; move the opening first');
+    }
+    return openingStart >= splitLength
+      ? freeze({ ...opening, wallId: secondWallId, center: opening.center - splitLength })
+      : opening;
+  });
   const walls = project.walls.flatMap((item) => item.id === wallId ? [first, second] : [item]);
-  return copyProject(project, { walls });
+  return copyProject(project, { walls, wallOpenings });
 }
 
 export function roomArea(room: Room): number {
@@ -397,6 +499,7 @@ export function normalizeProject(value: unknown): DesignProject {
   if (!Array.isArray(candidate.rooms) || !Array.isArray(candidate.walls) || !Array.isArray(candidate.furniture) || !Array.isArray(candidate.materials)) {
     throw new TypeError('project is missing required collections');
   }
+  if (candidate.wallOpenings !== undefined && !Array.isArray(candidate.wallOpenings)) throw new TypeError('wallOpenings must be an array');
   const rawLevels = Array.isArray(candidate.levels) ? candidate.levels : [];
   const levels: Level[] = rawLevels.flatMap((raw, index) => {
     if (!raw || typeof raw !== 'object') return [];
@@ -413,6 +516,30 @@ export function normalizeProject(value: unknown): DesignProject {
   const levelFor = (item: { levelId?: string }) => item.levelId && knownLevels.has(item.levelId) ? item.levelId : fallbackLevelId;
   const rooms = candidate.rooms.map((room) => freeze({ ...room, levelId: levelFor(room) })) as Room[];
   const walls = candidate.walls.map((wall) => freeze({ ...wall, levelId: levelFor(wall) })) as Wall[];
+  const wallOpenings: WallOpening[] = (candidate.wallOpenings ?? []).map((value) => {
+    if (!value || typeof value !== 'object') throw new TypeError('wall opening must be an object');
+    const raw = value as Partial<WallOpening>;
+    const opening: WallOpening = freeze({
+      id: id(raw.id as string, 'opening id'),
+      wallId: id(raw.wallId as string, 'opening wallId'),
+      kind: raw.kind as WallOpeningKind,
+      center: raw.center as number,
+      width: raw.width as number,
+      height: raw.height as number,
+      sillHeight: raw.sillHeight as number,
+    });
+    if (opening.kind !== 'door' && opening.kind !== 'window') throw new TypeError('opening kind must be door or window');
+    const host = walls.find((wall) => wall.id === opening.wallId);
+    if (!host) throw new RangeError(`opening host wall is missing: ${opening.wallId}`);
+    validateOpening(host, opening);
+    return opening;
+  });
+  const openingIds = new Set<string>();
+  wallOpenings.forEach((opening, index) => {
+    if (openingIds.has(opening.id)) throw new RangeError(`duplicate opening id: ${opening.id}`);
+    openingIds.add(opening.id);
+    assertNoOpeningOverlap(wallOpenings.slice(0, index), opening);
+  });
   const furniture = candidate.furniture.map((item) => {
     const raw = item as Partial<FurnitureInstance>;
     const elevation = Number.isFinite(raw.elevation) ? Number(raw.elevation) : 0;
@@ -431,6 +558,7 @@ export function normalizeProject(value: unknown): DesignProject {
     activeLevelId,
     rooms: freeze(rooms),
     walls: freeze(walls),
+    wallOpenings: freeze(wallOpenings),
     furniture: freeze(furniture),
     materials: freeze(materials),
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
@@ -471,6 +599,7 @@ export function createStarterProject(
     activeLevelId: level.id,
     rooms: freeze(rooms),
     walls: freeze(walls),
+    wallOpenings: freeze([]),
     furniture: freeze([]),
     materials: freeze(materials),
     updatedAt: new Date().toISOString(),

@@ -33,6 +33,18 @@ export type Wall = Readonly<{
   levelId: string;
 }>;
 
+export type WallOpeningKind = 'door' | 'window';
+
+export type WallOpening = Readonly<{
+  id: string;
+  wallId: string;
+  kind: WallOpeningKind;
+  center: number;
+  width: number;
+  height: number;
+  sillHeight: number;
+}>;
+
 export type FurnitureInstance = Readonly<{
   id: string;
   assetId: string;
@@ -67,6 +79,7 @@ export type DesignProject = Readonly<{
   activeLevelId: string;
   rooms: readonly Room[];
   walls: readonly Wall[];
+  wallOpenings: readonly WallOpening[];
   furniture: readonly FurnitureInstance[];
   materials: readonly Material[];
   updatedAt: string;

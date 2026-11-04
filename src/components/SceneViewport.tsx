@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { frameProjectCamera } from '../domain/camera';
+import { wallSolidSegments } from '../domain/wall-openings';
 import type { DesignProject, Point } from '../domain/types';
 
 export type SceneViewportProps = {
@@ -104,17 +105,66 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
 
     project.walls.forEach((wall) => {
       const dx = wall.end.x - wall.start.x;
-      const dz = wall.end.y - wall.start.y;
-      const length = Math.hypot(dx, dz);
-      const angle = Math.atan2(dz, dx);
-      addBox(
-        scene,
-        [length, wall.height, wall.thickness],
-        [(wall.start.x + wall.end.x) / 2, floorElevation + wall.height / 2, -(wall.start.y + wall.end.y) / 2],
-        materialColor(project, wall.materialId, '#d2d0ca'),
-        wall.id,
-        -angle * (180 / Math.PI),
-      ).castShadow = true;
+      const dy = wall.end.y - wall.start.y;
+      const length = Math.hypot(dx, dy);
+      const unitX = dx / length;
+      const unitY = dy / length;
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      const openings = project.wallOpenings.filter((opening) => opening.wallId === wall.id);
+      wallSolidSegments(length, wall.height, openings).forEach((segment) => {
+        const along = (segment.start + segment.end) / 2;
+        const segmentHeight = segment.top - segment.bottom;
+        const mesh = addBox(
+          scene,
+          [segment.end - segment.start, segmentHeight, wall.thickness],
+          [wall.start.x + unitX * along, floorElevation + (segment.top + segment.bottom) / 2, -(wall.start.y + unitY * along)],
+          materialColor(project, wall.materialId, '#d2d0ca'),
+          wall.id,
+          -angle,
+        );
+        mesh.castShadow = true;
+      });
+
+      openings.forEach((opening) => {
+        const centerX = wall.start.x + unitX * opening.center;
+        const centerY = wall.start.y + unitY * opening.center;
+        const baseY = floorElevation + opening.sillHeight;
+        const frame = Math.min(0.07, opening.width * 0.08, opening.height * 0.08);
+        const frameDepth = wall.thickness * 1.25;
+        const frameColor = opening.kind === 'window' ? '#f7f8f8' : '#ddd2c1';
+        const left = addBox(scene, [frame, opening.height, frameDepth], [centerX - unitX * (opening.width / 2 - frame / 2), baseY + opening.height / 2, -(centerY - unitY * (opening.width / 2 - frame / 2))], frameColor, opening.id, -angle);
+        const right = addBox(scene, [frame, opening.height, frameDepth], [centerX + unitX * (opening.width / 2 - frame / 2), baseY + opening.height / 2, -(centerY + unitY * (opening.width / 2 - frame / 2))], frameColor, opening.id, -angle);
+        const header = addBox(scene, [opening.width, frame, frameDepth], [centerX, baseY + opening.height - frame / 2, -centerY], frameColor, opening.id, -angle);
+        left.castShadow = right.castShadow = header.castShadow = true;
+        if (opening.kind === 'window') {
+          const sill = addBox(scene, [opening.width, frame, frameDepth], [centerX, baseY + frame / 2, -centerY], frameColor, opening.id, -angle);
+          sill.castShadow = true;
+          const pane = new THREE.Mesh(
+            new THREE.BoxGeometry(Math.max(0.02, opening.width - frame * 2), Math.max(0.02, opening.height - frame * 2), 0.025),
+            new THREE.MeshStandardMaterial({ color: '#9dd5e6', transparent: true, opacity: 0.38, roughness: 0.22, metalness: 0.05 }),
+          );
+          pane.position.set(centerX, baseY + opening.height / 2, -centerY);
+          pane.rotation.y = angle * (Math.PI / 180);
+          pane.userData.selectionId = opening.id;
+          scene.add(pane);
+        } else {
+          const hingeX = centerX - unitX * (opening.width / 2 - frame);
+          const hingeY = centerY - unitY * (opening.width / 2 - frame);
+          const door = new THREE.Group();
+          door.position.set(hingeX, baseY + opening.height / 2, -hingeY);
+          door.rotation.y = angle * (Math.PI / 180) + 0.65;
+          const leaf = new THREE.Mesh(
+            new THREE.BoxGeometry(Math.max(0.04, opening.width - frame), Math.max(0.04, opening.height - frame), Math.max(0.035, wall.thickness * 0.28)),
+            new THREE.MeshStandardMaterial({ color: '#c8ad89', roughness: 0.74 }),
+          );
+          leaf.position.x = (opening.width - frame) / 2;
+          leaf.userData.selectionId = opening.id;
+          leaf.castShadow = true;
+          leaf.receiveShadow = true;
+          door.add(leaf);
+          scene.add(door);
+        }
+      });
     });
 
     project.furniture.filter((item) => !item.hidden).forEach((item) => {

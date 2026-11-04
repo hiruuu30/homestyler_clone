@@ -214,6 +214,35 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
           onPointerDown={(event) => { event.stopPropagation(); onSelect(wall.id); }}
         />
       ))}
+      {project.wallOpenings.map((opening) => {
+        const wall = project.walls.find((item) => item.id === opening.wallId);
+        if (!wall) return null;
+        const dx = wall.end.x - wall.start.x;
+        const dy = wall.end.y - wall.start.y;
+        const length = Math.hypot(dx, dy);
+        const centerX = wall.start.x + (dx / length) * opening.center;
+        const centerY = wall.start.y + (dy / length) * opening.center;
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        const half = opening.width / 2;
+        const selected = selectedId === opening.id;
+        return (
+          <g
+            key={opening.id}
+            className={`plan-opening plan-opening-${opening.kind}${selected ? ' is-selected' : ''}`}
+            transform={`translate(${centerX} ${centerY}) rotate(${angle})`}
+            role="button"
+            aria-label={`${opening.kind} opening, ${opening.width.toFixed(2)} m wide`}
+            onPointerDown={(event) => { event.stopPropagation(); onSelect(opening.id); }}
+          >
+            <rect x={-half} y={-wall.thickness / 2 - 0.025} width={opening.width} height={wall.thickness + 0.05} fill="#fff" />
+            {opening.kind === 'window'
+              ? <><line x1={-half} y1={-0.035} x2={half} y2={-0.035} /><line x1={-half} y1={0.035} x2={half} y2={0.035} /></>
+              : <><line x1={-half} y1={0} x2={-half} y2={-Math.min(opening.width * 0.92, 1.05)} /><path d={`M ${-half} ${-Math.min(opening.width * 0.92, 1.05)} A ${Math.min(opening.width, 1.05)} ${Math.min(opening.width, 1.05)} 0 0 1 ${half} 0`} fill="none" /></>}
+            <line className="opening-jamb" x1={-half} y1={-wall.thickness / 2 - 0.04} x2={-half} y2={wall.thickness / 2 + 0.04} />
+            <line className="opening-jamb" x1={half} y1={-wall.thickness / 2 - 0.04} x2={half} y2={wall.thickness / 2 + 0.04} />
+          </g>
+        );
+      })}
       {project.furniture.filter((item) => !item.hidden).map((item) => {
         const moving = drag?.mode === 'move' && drag.furnitureId === item.id ? drag : null;
         const x = item.position.x + (moving ? moving.current.x - moving.start.x : 0);
