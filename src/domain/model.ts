@@ -17,6 +17,16 @@ const DEFAULT_WALL_HEIGHT = 2.4;
 const DEFAULT_MATERIAL_ID = 'material-neutral-floor';
 const DEFAULT_LEVEL_ID = 'floor-ground';
 
+function unitScale(from: Units, to: Units): number {
+  if ((from !== 'm' && from !== 'ft') || (to !== 'm' && to !== 'ft')) throw new TypeError('units must be m or ft');
+  return (from === 'ft' ? 0.3048 : 1) / (to === 'ft' ? 0.3048 : 1);
+}
+
+function scaleLength(value: number, factor: number): number {
+  const scaled = Number((value * factor).toFixed(9));
+  return Object.is(scaled, -0) ? 0 : scaled;
+}
+
 function freeze<T extends object>(value: T): Readonly<T> {
   return Object.freeze(value);
 }
@@ -93,6 +103,45 @@ function copyProject(project: DesignProject, patch: Partial<DesignProject>): Des
   });
 }
 
+/** Convert every stored linear measurement while preserving the physical dimensions of the design. */
+export function convertProjectUnits(project: DesignProject, units: Units): DesignProject {
+  if (units !== 'm' && units !== 'ft') throw new TypeError('units must be m or ft');
+  if (project.units === units) return project;
+  const factor = unitScale(project.units, units);
+  const scalePoint = (value: Point): Point => point({ x: scaleLength(value.x, factor), y: scaleLength(value.y, factor) }, 'scaled point');
+  return copyProject(project, {
+    units,
+    levels: project.levels.map((level) => freeze({
+      ...level,
+      elevation: scaleLength(level.elevation, factor),
+      height: scaleLength(level.height, factor),
+    })),
+    rooms: project.rooms.map((room) => freeze({ ...room, points: freeze(room.points.map(scalePoint)) })),
+    walls: project.walls.map((wall) => freeze({
+      ...wall,
+      start: scalePoint(wall.start),
+      end: scalePoint(wall.end),
+      thickness: scaleLength(wall.thickness, factor),
+      height: scaleLength(wall.height, factor),
+    })),
+    wallOpenings: project.wallOpenings.map((opening) => freeze({
+      ...opening,
+      center: scaleLength(opening.center, factor),
+      width: scaleLength(opening.width, factor),
+      height: scaleLength(opening.height, factor),
+      sillHeight: scaleLength(opening.sillHeight, factor),
+    })),
+    furniture: project.furniture.map((item) => freeze({
+      ...item,
+      position: scalePoint(item.position),
+      elevation: scaleLength(item.elevation, factor),
+      width: scaleLength(item.width, factor),
+      depth: scaleLength(item.depth, factor),
+      height: scaleLength(item.height, factor),
+    })),
+  });
+}
+
 export function createRectRoom(
   roomId: string,
   name: string,
@@ -128,10 +177,11 @@ export function createWall(
   wallId: string,
   start: Point,
   end: Point,
-  thickness = DEFAULT_WALL_THICKNESS,
-  height = DEFAULT_WALL_HEIGHT,
+  thickness: number | undefined = undefined,
+  height: number | undefined = undefined,
   materialId = 'material-neutral-wall',
   levelId = DEFAULT_LEVEL_ID,
+  units: Units = 'm',
 ): Wall {
   id(wallId, 'wall id');
   const from = point(start, 'wall start');
@@ -139,11 +189,14 @@ export function createWall(
   if (from.x === to.x && from.y === to.y) {
     throw new RangeError('wall start and end must be different points');
   }
-  positive(thickness, 'wall thickness');
-  positive(height, 'wall height');
+  const factor = unitScale('m', units);
+  const wallThickness = thickness ?? DEFAULT_WALL_THICKNESS * factor;
+  const wallHeight = height ?? DEFAULT_WALL_HEIGHT * factor;
+  positive(wallThickness, 'wall thickness');
+  positive(wallHeight, 'wall height');
   id(materialId, 'materialId');
   id(levelId, 'levelId');
-  return freeze({ id: wallId, start: from, end: to, thickness, height, materialId, levelId });
+  return freeze({ id: wallId, start: from, end: to, thickness: wallThickness, height: wallHeight, materialId, levelId });
 }
 
 export function addWallOpening(project: DesignProject, wallId: string, kind: WallOpeningKind): DesignProject {
@@ -152,10 +205,11 @@ export function addWallOpening(project: DesignProject, wallId: string, kind: Wal
   const wall = project.walls.find((item) => item.id === wallId);
   if (!wall) throw new RangeError(`unknown wall: ${wallId}`);
   const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
-  const width = kind === 'door' ? Math.min(0.9, length * 0.7) : Math.min(1.2, length * 0.7);
-  const height = kind === 'door' ? Math.min(2.05, wall.height) : Math.min(1.2, Math.max(0.1, wall.height - 0.6));
-  const sillHeight = kind === 'door' ? 0 : Math.min(0.9, wall.height - height);
-  if (width < 0.2) throw new RangeError('wall is too short for a door or window');
+  const factor = unitScale('m', project.units);
+  const width = kind === 'door' ? Math.min(0.9 * factor, length * 0.7) : Math.min(1.2 * factor, length * 0.7);
+  const height = kind === 'door' ? Math.min(2.05 * factor, wall.height) : Math.min(1.2 * factor, Math.max(0.1 * factor, wall.height - 0.6 * factor));
+  const sillHeight = kind === 'door' ? 0 : Math.min(0.9 * factor, wall.height - height);
+  if (width < 0.2 * factor) throw new RangeError('wall is too short for a door or window');
   const usedIds = new Set(project.wallOpenings.map((opening) => opening.id));
   let suffix = 1;
   while (usedIds.has(`opening-${suffix}`)) suffix += 1;
@@ -246,7 +300,8 @@ export function addLevel(project: DesignProject, name?: string): DesignProject {
     levelId = `floor-${ordinal}`;
   }
   const base = project.levels.reduce((highest, level) => Math.max(highest, level.elevation + level.height), 0);
-  const level: Level = freeze({ id: levelId, name: name?.trim() || `Floor ${ordinal}`, elevation: base + 0.3, height: 2.7 });
+  const factor = unitScale('m', project.units);
+  const level: Level = freeze({ id: levelId, name: name?.trim() || `Floor ${ordinal}`, elevation: base + 0.3 * factor, height: 2.7 * factor });
   return copyProject(project, { levels: [...project.levels, level], activeLevelId: level.id });
 }
 
@@ -376,7 +431,10 @@ export function duplicateFurniture(project: DesignProject, furnitureId: string):
   const duplicate: FurnitureInstance = freeze({
     ...source,
     id: duplicateId,
-    position: point({ x: source.position.x + 0.35, y: source.position.y + 0.35 }, 'duplicate position'),
+    position: point({
+      x: source.position.x + 0.35 * unitScale('m', project.units),
+      y: source.position.y + 0.35 * unitScale('m', project.units),
+    }, 'duplicate position'),
   });
   return copyProject(project, { furniture: [...project.furniture, duplicate] });
 }
@@ -489,8 +547,8 @@ export function roomArea(room: Room): number {
   return area;
 }
 
-function defaultLevel(): Level {
-  return freeze({ id: DEFAULT_LEVEL_ID, name: 'Ground Floor', elevation: 0, height: DEFAULT_WALL_HEIGHT });
+function defaultLevel(units: Units = 'm'): Level {
+  return freeze({ id: DEFAULT_LEVEL_ID, name: 'Ground Floor', elevation: 0, height: DEFAULT_WALL_HEIGHT * unitScale('m', units) });
 }
 
 export function normalizeProject(value: unknown): DesignProject {
@@ -500,16 +558,17 @@ export function normalizeProject(value: unknown): DesignProject {
     throw new TypeError('project is missing required collections');
   }
   if (candidate.wallOpenings !== undefined && !Array.isArray(candidate.wallOpenings)) throw new TypeError('wallOpenings must be an array');
+  const units: Units = candidate.units === 'ft' ? 'ft' : 'm';
   const rawLevels = Array.isArray(candidate.levels) ? candidate.levels : [];
   const levels: Level[] = rawLevels.flatMap((raw, index) => {
     if (!raw || typeof raw !== 'object') return [];
     const item = raw as Partial<Level>;
     const levelId = typeof item.id === 'string' && item.id.trim() ? item.id : `floor-${index + 1}`;
-    const elevation = Number.isFinite(item.elevation) ? Number(item.elevation) : index * 3;
-    const height = Number.isFinite(item.height) && Number(item.height) > 0 ? Number(item.height) : DEFAULT_WALL_HEIGHT;
+    const elevation = Number.isFinite(item.elevation) ? Number(item.elevation) : index * 3 * unitScale('m', units);
+    const height = Number.isFinite(item.height) && Number(item.height) > 0 ? Number(item.height) : DEFAULT_WALL_HEIGHT * unitScale('m', units);
     return [freeze({ id: levelId, name: typeof item.name === 'string' && item.name.trim() ? item.name : (index === 0 ? 'Ground Floor' : `Floor ${index + 1}`), elevation, height })];
   });
-  if (!levels.length) levels.push(defaultLevel());
+  if (!levels.length) levels.push(defaultLevel(units));
   const knownLevels = new Set(levels.map((level) => level.id));
   const fallbackLevelId = levels[0].id;
   const activeLevelId = typeof candidate.activeLevelId === 'string' && knownLevels.has(candidate.activeLevelId) ? candidate.activeLevelId : fallbackLevelId;
@@ -548,7 +607,6 @@ export function normalizeProject(value: unknown): DesignProject {
     return freeze({ ...item, elevation, rotationX, rotationZ, hidden: raw.hidden === true, levelId: levelFor(item) });
   }) as FurnitureInstance[];
   const materials = candidate.materials.map((item) => copyMaterial(item as Material));
-  const units = candidate.units === 'ft' ? 'ft' : 'm';
   return freeze({
     ...candidate,
     id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : 'imported-project',
@@ -573,23 +631,24 @@ export function createStarterProject(
   id(projectId, 'project id');
   id(name, 'project name');
   if (units !== 'm' && units !== 'ft') throw new TypeError('units must be m or ft');
-  const level = defaultLevel();
+  const factor = unitScale('m', units);
+  const level = defaultLevel(units);
   const materials: readonly Material[] = [
     copyMaterial({ id: DEFAULT_MATERIAL_ID, name: 'Warm Neutral Floor', category: 'floor', color: '#d9c7aa' }),
     copyMaterial({ id: 'material-neutral-wall', name: 'Soft White Wall', category: 'wall', color: '#f4f1eb' }),
   ];
   const rooms = [
-    createRectRoom('room-starter', 'Lobby', 2, 2.6, { x: 4.2, y: -0.5 }, DEFAULT_MATERIAL_ID, level.id),
-    createRectRoom('room-living', 'Living Room', 2, 2.6, { x: 2.2, y: 0.8 }, DEFAULT_MATERIAL_ID, level.id),
+    createRectRoom('room-starter', 'Lobby', 2 * factor, 2.6 * factor, { x: 4.2 * factor, y: -0.5 * factor }, DEFAULT_MATERIAL_ID, level.id),
+    createRectRoom('room-living', 'Living Room', 2 * factor, 2.6 * factor, { x: 2.2 * factor, y: 0.8 * factor }, DEFAULT_MATERIAL_ID, level.id),
   ];
   const walls = [
-    createWall('wall-north', { x: 4.2, y: -0.5 }, { x: 6.2, y: -0.5 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-east', { x: 6.2, y: -0.5 }, { x: 6.2, y: 2.1 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-south', { x: 6.2, y: 2.1 }, { x: 4.2, y: 2.1 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-partition', { x: 4.2, y: 3.4 }, { x: 4.2, y: -0.5 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-living-south', { x: 4.2, y: 3.4 }, { x: 2.2, y: 3.4 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-living-west', { x: 2.2, y: 3.4 }, { x: 2.2, y: 0.8 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-living-north', { x: 2.2, y: 0.8 }, { x: 4.2, y: 0.8 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
+    createWall('wall-north', { x: 4.2 * factor, y: -0.5 * factor }, { x: 6.2 * factor, y: -0.5 * factor }, undefined, undefined, 'material-neutral-wall', level.id, units),
+    createWall('wall-east', { x: 6.2 * factor, y: -0.5 * factor }, { x: 6.2 * factor, y: 2.1 * factor }, undefined, undefined, 'material-neutral-wall', level.id, units),
+    createWall('wall-south', { x: 6.2 * factor, y: 2.1 * factor }, { x: 4.2 * factor, y: 2.1 * factor }, undefined, undefined, 'material-neutral-wall', level.id, units),
+    createWall('wall-partition', { x: 4.2 * factor, y: 3.4 * factor }, { x: 4.2 * factor, y: -0.5 * factor }, undefined, undefined, 'material-neutral-wall', level.id, units),
+    createWall('wall-living-south', { x: 4.2 * factor, y: 3.4 * factor }, { x: 2.2 * factor, y: 3.4 * factor }, undefined, undefined, 'material-neutral-wall', level.id, units),
+    createWall('wall-living-west', { x: 2.2 * factor, y: 3.4 * factor }, { x: 2.2 * factor, y: 0.8 * factor }, undefined, undefined, 'material-neutral-wall', level.id, units),
+    createWall('wall-living-north', { x: 2.2 * factor, y: 0.8 * factor }, { x: 4.2 * factor, y: 0.8 * factor }, undefined, undefined, 'material-neutral-wall', level.id, units),
   ];
   return freeze({
     id: projectId,

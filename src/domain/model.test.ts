@@ -8,6 +8,7 @@ import {
   createRectRoom,
   createStarterProject,
   createWall,
+  convertProjectUnits,
   duplicateFurniture,
   moveFurniture,
   normalizeProject,
@@ -69,6 +70,54 @@ describe('domain model', () => {
     expect(project.walls).toHaveLength(7);
     expect(project.furniture).toEqual([]);
     expect(project.rooms.reduce((sum, room) => sum + roomArea(room), 0)).toBeCloseTo(10.4);
+  });
+
+  it('converts every project length between metres and feet without changing physical geometry', () => {
+    let project = createStarterProject();
+    project = addWallOpening(project, 'wall-north', 'window');
+    project = addFurniture(project, furniture);
+    project = addLevel(project, 'Upper Floor');
+    const roomAreaM2 = roomArea(project.rooms[0]);
+    const wallLengthM = Math.hypot(
+      project.walls[0].end.x - project.walls[0].start.x,
+      project.walls[0].end.y - project.walls[0].start.y,
+    );
+
+    const imperial = convertProjectUnits(project, 'ft');
+    const convertedRoom = imperial.rooms[0];
+    expect(imperial.units).toBe('ft');
+    expect(convertedRoom.points[0].x).toBeCloseTo(project.rooms[0].points[0].x / 0.3048, 8);
+    expect(roomArea(convertedRoom) * 0.3048 ** 2).toBeCloseTo(roomAreaM2, 8);
+    expect(imperial.walls[0].thickness * 0.3048).toBeCloseTo(project.walls[0].thickness, 8);
+    expect(Math.hypot(
+      imperial.walls[0].end.x - imperial.walls[0].start.x,
+      imperial.walls[0].end.y - imperial.walls[0].start.y,
+    ) * 0.3048).toBeCloseTo(wallLengthM, 8);
+    expect(imperial.wallOpenings[0].width * 0.3048).toBeCloseTo(project.wallOpenings[0].width, 8);
+    expect(imperial.furniture[0]).toMatchObject({
+      width: expect.closeTo(project.furniture[0].width / 0.3048, 8),
+      position: {
+        x: expect.closeTo(project.furniture[0].position.x / 0.3048, 8),
+        y: expect.closeTo(project.furniture[0].position.y / 0.3048, 8),
+      },
+    });
+    expect(imperial.levels[1].height * 0.3048).toBeCloseTo(project.levels[1].height, 8);
+    expect(project.units).toBe('m');
+    expect(Object.isFrozen(imperial.walls[0].start)).toBe(true);
+
+    const metricAgain = convertProjectUnits(imperial, 'm');
+    expect(metricAgain.rooms[0].points).toEqual(project.rooms[0].points);
+    expect(metricAgain.walls[0].thickness).toBe(project.walls[0].thickness);
+    expect(convertProjectUnits(project, 'm')).toBe(project);
+  });
+
+  it('creates imperial starter geometry and new objects at metric-equivalent dimensions', () => {
+    const imperial = createStarterProject('imperial-starter', 'Imperial starter', 'ft');
+    expect(roomArea(imperial.rooms[0]) * 0.3048 ** 2).toBeCloseTo(5.2, 8);
+    expect(imperial.walls[0].height * 0.3048).toBeCloseTo(2.4, 8);
+    const upper = addLevel(imperial, 'Upper Floor');
+    expect(upper.levels[1].height * 0.3048).toBeCloseTo(2.7, 8);
+    expect(addWallOpening(imperial, 'wall-north', 'door').wallOpenings[0].width * 0.3048).toBeCloseTo(0.9, 8);
   });
 
   it('rejects a degenerate standalone wall', () => {

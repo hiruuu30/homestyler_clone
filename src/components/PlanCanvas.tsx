@@ -25,20 +25,22 @@ const GRID_SIZE = 1;
 const PADDING = 2;
 
 function projectBounds(project: DesignProject): { minX: number; minY: number; width: number; height: number } {
+  const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
+  const padding = PADDING * unitsPerMetre;
   const points: Point[] = [];
   project.rooms.forEach((room) => points.push(...room.points));
   project.walls.forEach((wall) => points.push(wall.start, wall.end));
   project.furniture.filter((item) => !item.hidden).forEach((item) => points.push(item.position));
-  if (points.length === 0) return { minX: -PADDING, minY: -PADDING, width: 20, height: 14 };
+  if (points.length === 0) return { minX: -padding, minY: -padding, width: 20 * unitsPerMetre, height: 14 * unitsPerMetre };
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
-  const minX = Math.min(...xs) - PADDING;
-  const minY = Math.min(...ys) - PADDING;
+  const minX = Math.min(...xs) - padding;
+  const minY = Math.min(...ys) - padding;
   return {
     minX,
     minY,
-    width: Math.max(12, Math.max(...xs) - minX + PADDING),
-    height: Math.max(9, Math.max(...ys) - minY + PADDING),
+    width: Math.max(12 * unitsPerMetre, Math.max(...xs) - minX + padding),
+    height: Math.max(9 * unitsPerMetre, Math.max(...ys) - minY + padding),
   };
 }
 
@@ -57,14 +59,17 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   const bounds = projectBounds(project);
   const visibleBox = cameraBox ?? bounds;
   const viewBox = `${visibleBox.minX} ${visibleBox.minY} ${visibleBox.width} ${visibleBox.height}`;
+  const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
+  const gridSize = GRID_SIZE * unitsPerMetre;
 
   useEffect(() => setCameraBox(null), [fitRequest]);
 
   const snapDistance = () => {
     const rect = svgRef.current?.getBoundingClientRect();
-    if (!rect || !rect.width || !rect.height) return 0.2;
+    const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
+    if (!rect || !rect.width || !rect.height) return 0.2 * unitsPerMetre;
     const worldPerPixel = Math.max(visibleBox.width / rect.width, visibleBox.height / rect.height);
-    return Math.max(0.1, Math.min(0.25, worldPerPixel * 12));
+    return Math.max(0.1 * unitsPerMetre, Math.min(0.25 * unitsPerMetre, worldPerPixel * 12));
   };
   const snapPoint = (point: Point) => snapPlanPoint(project, point, snapDistance());
 
@@ -138,11 +143,11 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
     const point = modelPoint(event.clientX, event.clientY) ?? drag.current;
     const end = drag.mode === 'create' ? snapPoint(point) : point;
     if (drag.mode === 'create') {
-      if (distance(end, drag.start) > 0.05) {
+      if (distance(end, drag.start) > 0.05 * unitsPerMetre) {
         if (tool === 'room') onCreateRoom(drag.start, end);
         if (tool === 'wall') onCreateWall(drag.start, end);
       }
-    } else if (distance(end, drag.start) > 0.05) {
+    } else if (distance(end, drag.start) > 0.05 * unitsPerMetre) {
       onMoveFurniture(drag.furnitureId, {
         x: drag.origin.x + end.x - drag.start.x,
         y: drag.origin.y + end.y - drag.start.y,
@@ -163,7 +168,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
     const anchor = modelPoint(event.clientX, event.clientY);
     if (!anchor) return;
     const origin = cameraBox ?? bounds;
-    const nextWidth = Math.max(1.5, Math.min(200, origin.width * Math.exp(event.deltaY * 0.0012)));
+    const nextWidth = Math.max(1.5 * unitsPerMetre, Math.min(200 * unitsPerMetre, origin.width * Math.exp(event.deltaY * 0.0012)));
     const nextHeight = origin.height * nextWidth / origin.width;
     const fractionX = (anchor.x - origin.minX) / origin.width;
     const fractionY = (anchor.y - origin.minY) / origin.height;
@@ -189,8 +194,8 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       onContextMenu={(event) => event.preventDefault()}
     >
       <defs>
-        <pattern id="plan-grid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
-          <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} className="plan-grid-line" fill="none" />
+        <pattern id="plan-grid" width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
+          <path d={`M ${gridSize} 0 L 0 0 0 ${gridSize}`} className="plan-grid-line" fill="none" />
         </pattern>
       </defs>
       <rect className="plan-grid" x={bounds.minX} y={bounds.minY} width={bounds.width} height={bounds.height} fill="url(#plan-grid)" />
@@ -231,7 +236,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
             className={`plan-opening plan-opening-${opening.kind}${selected ? ' is-selected' : ''}`}
             transform={`translate(${centerX} ${centerY}) rotate(${angle})`}
             role="button"
-            aria-label={`${opening.kind} opening, ${opening.width.toFixed(2)} m wide`}
+            aria-label={`${opening.kind} opening, ${opening.width.toFixed(2)} ${project.units} wide`}
             onPointerDown={(event) => { event.stopPropagation(); onSelect(opening.id); }}
           >
             <rect x={-half} y={-wall.thickness / 2 - 0.025} width={opening.width} height={wall.thickness + 0.05} fill="#fff" />

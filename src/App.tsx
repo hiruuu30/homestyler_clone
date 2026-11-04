@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import {
   addFurniture, addWallOpening, arrayFurniture, assignRoomMaterial, createRectRoom, createStarterProject, duplicateFurniture,
-  addLevel as addProjectLevel, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
+  addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updateWallOpening,
   updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
@@ -79,6 +79,10 @@ export default function App() {
   const selectedOpening = visibleProject.wallOpenings.find((item) => item.id === selectedId) ?? null;
   const area = useMemo(() => visibleProject.rooms.reduce((sum, room) => sum + roomArea(room), 0), [visibleProject.rooms]);
   const selectedMaterial = selectedRoom ? project.materials.find((item) => item.id === selectedRoom.floorMaterialId) : null;
+  const lengthUnit = project.units;
+  const areaUnit = project.units === 'ft' ? 'ft²' : 'm²';
+  const metresToProjectUnits = project.units === 'ft' ? 1 / 0.3048 : 1;
+  const metresPerProjectUnit = project.units === 'ft' ? 0.3048 : 1;
 
   function commit(next: DesignProject, nextLevelId = activeLevelId) {
     setUndoStack((items) => [...items.slice(-49), project]);
@@ -90,6 +94,7 @@ export default function App() {
   function undo() {
     const previous = undoStack.at(-1);
     if (!previous) return;
+    if (previous.units !== project.units) setCameraFitRequest((value) => value + 1);
     setRedoStack((items) => [...items, project]);
     setUndoStack((items) => items.slice(0, -1));
     setProject(previous);
@@ -105,6 +110,7 @@ export default function App() {
   function redo() {
     const next = redoStack.at(-1);
     if (!next) return;
+    if (next.units !== project.units) setCameraFitRequest((value) => value + 1);
     setUndoStack((items) => [...items, project]);
     setRedoStack((items) => items.slice(0, -1));
     setProject(next);
@@ -118,13 +124,13 @@ export default function App() {
   }
   function notify(message: string) { setToast(message); window.setTimeout(() => setToast(''), 2400); }
   function createRoom(start: Point, end: Point) {
-    if (distance(start, end) < 0.35) { notify('Draw a larger room'); return; }
+    if (distance(start, end) * metresPerProjectUnit < 0.35) { notify('Draw a larger room'); return; }
     const minX = Math.min(start.x, end.x);
     const minY = Math.min(start.y, end.y);
     const room = createRectRoom(nextEntityId(project.rooms, 'room'), `Room ${project.rooms.length + 1}`, Math.abs(end.x - start.x), Math.abs(end.y - start.y), { x: minX, y: minY }, project.materials[0]?.id, activeLevelId);
     const existingWalls = [...project.walls];
     const walls = room.points.map((point, index) => {
-      const wall = makeWall(nextEntityId(existingWalls, 'wall'), point, room.points[(index + 1) % room.points.length], undefined, undefined, undefined, activeLevelId);
+      const wall = makeWall(nextEntityId(existingWalls, 'wall'), point, room.points[(index + 1) % room.points.length], undefined, undefined, undefined, activeLevelId, project.units);
       existingWalls.push(wall);
       return wall;
     });
@@ -134,8 +140,8 @@ export default function App() {
     setTool('select');
   }
   function createWall(start: Point, end: Point) {
-    if (distance(start, end) < 0.05) { notify('Draw a longer wall segment'); return; }
-    const wall = makeWall(nextEntityId(project.walls, 'wall'), start, end, undefined, undefined, undefined, activeLevelId);
+    if (distance(start, end) * metresPerProjectUnit < 0.05) { notify('Draw a longer wall segment'); return; }
+    const wall = makeWall(nextEntityId(project.walls, 'wall'), start, end, undefined, undefined, undefined, activeLevelId, project.units);
     const next = { ...project, walls: [...project.walls, wall] };
     commit(next);
     setSelectedId(wall.id);
@@ -149,9 +155,9 @@ export default function App() {
       name: 'Starter sofa',
       position: centerOf(room.points),
       rotation: 0,
-      width: 1.8,
-      depth: 0.8,
-      height: 0.85,
+      width: 1.8 * metresToProjectUnits,
+      depth: 0.8 * metresToProjectUnits,
+      height: 0.85 * metresToProjectUnits,
       elevation: 0,
       color: '#b9a58e',
       levelId: activeLevelId,
@@ -188,7 +194,7 @@ export default function App() {
   }
   function toggleArraySettings() {
     const open = !arraySettingsOpen;
-    if (open && selectedFurniture) setArrayOffsetX(Number((selectedFurniture.width + 0.2).toFixed(2)));
+    if (open && selectedFurniture) setArrayOffsetX(Number((selectedFurniture.width + 0.2 * metresToProjectUnits).toFixed(2)));
     setArraySettingsOpen(open);
   }
   function toggleSelectedFurnitureHidden() {
@@ -259,6 +265,12 @@ export default function App() {
   function exportSchedule() {
     downloadText(exportQuantitiesCsv(project), deliverableFileName(project.name, 'csv'), 'text/csv;charset=utf-8');
     notify('Project quantities CSV exported');
+  }
+  function changeUnits(units: 'm' | 'ft') {
+    if (units === project.units) return;
+    commit(convertProjectUnits(project, units));
+    setCameraFitRequest((value) => value + 1);
+    notify(`Project dimensions converted to ${units === 'm' ? 'metres' : 'feet'}`);
   }
   async function importProject(file?: File) {
     if (!file) return;
@@ -370,7 +382,7 @@ export default function App() {
             </div>
             <div className="section-label">FLOORS</div>
             <div className="level-list">{project.levels.map((level) => <div key={level.id} className={`level-row${level.id === activeLevelId ? ' active' : ''}`}>
-              <button className="level-select" onClick={() => selectLevel(level.id)}><Layers3 size={14} /><span>{level.name}<small>Elevation {level.elevation.toFixed(2)} m</small></span></button>
+              <button className="level-select" onClick={() => selectLevel(level.id)}><Layers3 size={14} /><span>{level.name}<small>Elevation {level.elevation.toFixed(2)} {lengthUnit}</small></span></button>
               {project.levels.length > 1 && <button className="level-delete" title={`Delete ${level.name} · undoable`} onClick={() => deleteLevel(level.id)}><Trash2 size={13} /></button>}
             </div>)}</div>
             <button className="action-row add-level" onClick={addLevel}><Plus size={15} />Add floor</button>
@@ -393,7 +405,8 @@ export default function App() {
             <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
           </div>}
           {panel === 'project' && <div className="panel-scroll">
-            <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects · {project.wallOpenings.length} openings</p><p>{area.toFixed(2)} m² on {activeLevel.name}</p></div>
+            <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects · {project.wallOpenings.length} openings</p><p>{area.toFixed(2)} {areaUnit} on {activeLevel.name}</p></div>
+            <label className="unit-setting">Project units<select aria-label="Project units" value={project.units} onChange={(event) => changeUnits(event.target.value as 'm' | 'ft')}><option value="m">Metric · metres</option><option value="ft">Imperial · feet</option></select></label>
             <button className="action-row" onClick={newDesign}><FilePlus2 size={16} />New design</button>
             <button className="action-row" onClick={() => importRef.current?.click()}><Upload size={16} />Import RoomLab JSON</button>
             <button className="action-row" onClick={exportProject}><Download size={16} />Export RoomLab JSON</button>
@@ -434,37 +447,37 @@ export default function App() {
             }}
           /></div>
           <div className={`inspector-head${selectedWall ? ' wall-selected' : ''}`}>{!selectedWall && <small>PROPERTIES</small>}<h2>{selectedWall ? 'Layer settings' : selectedRoom?.name ?? selectedFurniture?.name ?? (selectedOpening ? `${selectedOpening.kind === 'door' ? 'Door' : 'Window'} opening` : 'Design summary')}</h2></div>
-          {!selectedRoom && !selectedWall && !selectedFurniture && !selectedOpening && <div className="summary"><Building2 size={27} /><p>{activeLevel.name} · select a room, wall, furniture object or opening.</p><div><span>Rooms</span><b>{visibleProject.rooms.length}</b></div><div><span>Floor area</span><b>{area.toFixed(2)} m²</b></div><div><span>Furniture</span><b>{visibleProject.furniture.length}</b></div></div>}
-          {selectedRoom && <div className="properties"><section><h3>Room settings</h3><label>Room name<input value={selectedRoom.name} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, name: event.target.value } : room) })} /></label><label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} m²`} /></label><label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label></section><section><h3>Room options</h3><label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label></section></div>}
+          {!selectedRoom && !selectedWall && !selectedFurniture && !selectedOpening && <div className="summary"><Building2 size={27} /><p>{activeLevel.name} · select a room, wall, furniture object or opening.</p><div><span>Rooms</span><b>{visibleProject.rooms.length}</b></div><div><span>Floor area</span><b>{area.toFixed(2)} {areaUnit}</b></div><div><span>Furniture</span><b>{visibleProject.furniture.length}</b></div></div>}
+          {selectedRoom && <div className="properties"><section><h3>Room settings</h3><label>Room name<input value={selectedRoom.name} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, name: event.target.value } : room) })} /></label><label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} ${areaUnit}`} /></label><label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label></section><section><h3>Room options</h3><label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label></section></div>}
           {selectedWall && <div className="properties wall-properties">
-            <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} m²</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
+            <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} {areaUnit}</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
             <section className="wall-settings-section"><h3>Wall settings</h3><div className="wall-fields">
               <label>Size<div className="unit-input"><input readOnly value={distance(selectedWall.start, selectedWall.end).toFixed(2)} /><span>{project.units}</span></div></label>
-              <NumericField label="Start X" value={selectedWall.start.x} unit="m" step={0.05} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { start: { ...selectedWall.start, x: value } }))} />
-              <NumericField label="Start Y" value={selectedWall.start.y} unit="m" step={0.05} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { start: { ...selectedWall.start, y: value } }))} />
-              <NumericField label="End X" value={selectedWall.end.x} unit="m" step={0.05} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { end: { ...selectedWall.end, x: value } }))} />
-              <NumericField label="End Y" value={selectedWall.end.y} unit="m" step={0.05} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { end: { ...selectedWall.end, y: value } }))} />
-              <NumericField label="Wall height" value={selectedWall.height} unit={project.units} min={0.1} step={0.05} onCommit={(value) => commit(updateWallHeight(project, selectedWall.id, value))} />
-              <NumericField label="Thickness" value={selectedWall.thickness} unit={project.units} min={0.05} step={0.01} onCommit={(value) => commit(updateWallThickness(project, selectedWall.id, value))} />
+              <NumericField label="Start X" value={selectedWall.start.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { start: { ...selectedWall.start, x: value } }))} />
+              <NumericField label="Start Y" value={selectedWall.start.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { start: { ...selectedWall.start, y: value } }))} />
+              <NumericField label="End X" value={selectedWall.end.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { end: { ...selectedWall.end, x: value } }))} />
+              <NumericField label="End Y" value={selectedWall.end.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { end: { ...selectedWall.end, y: value } }))} />
+              <NumericField label="Wall height" value={selectedWall.height} unit={lengthUnit} min={0.1 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallHeight(project, selectedWall.id, value))} />
+              <NumericField label="Thickness" value={selectedWall.thickness} unit={lengthUnit} min={0.05 * metresToProjectUnits} step={0.01 * metresToProjectUnits} onCommit={(value) => commit(updateWallThickness(project, selectedWall.id, value))} />
               <button className="rotate-btn" onClick={splitSelectedWall}><Scissors size={14} /> Split wall at midpoint</button>
               <button className="rotate-btn danger-action wall-delete" onClick={deleteSelected}><Trash2 size={14} /> Delete wall</button>
             </div></section>
           </div>}
           {selectedOpening && <div className="properties"><section><h3>{selectedOpening.kind === 'door' ? 'Door' : 'Window'} opening</h3>
-            <NumericField label="Along wall" value={selectedOpening.center} unit="m" min={selectedOpening.width / 2} step={0.05} onCommit={(value) => editSelectedOpening({ center: value })} />
-            <NumericField label="Width" value={selectedOpening.width} unit="m" min={0.2} step={0.05} onCommit={(value) => editSelectedOpening({ width: value })} />
-            <NumericField label="Height" value={selectedOpening.height} unit="m" min={0.1} step={0.05} onCommit={(value) => editSelectedOpening({ height: value })} />
-            {selectedOpening.kind === 'window' && <NumericField label="Sill height" value={selectedOpening.sillHeight} unit="m" min={0} step={0.05} onCommit={(value) => editSelectedOpening({ sillHeight: value })} />}
+            <NumericField label="Along wall" value={selectedOpening.center} unit={lengthUnit} min={selectedOpening.width / 2} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedOpening({ center: value })} />
+            <NumericField label="Width" value={selectedOpening.width} unit={lengthUnit} min={0.2 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedOpening({ width: value })} />
+            <NumericField label="Height" value={selectedOpening.height} unit={lengthUnit} min={0.1 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedOpening({ height: value })} />
+            {selectedOpening.kind === 'window' && <NumericField label="Sill height" value={selectedOpening.sillHeight} unit={lengthUnit} min={0} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedOpening({ sillHeight: value })} />}
             <button className="rotate-btn" onClick={() => setSelectedId(selectedOpening.wallId)}><Building2 size={14} /> Select host wall</button>
             <button className="rotate-btn danger-action" onClick={deleteSelected}><Trash2 size={14} /> Delete opening</button>
           </section></div>}
           {selectedFurniture && <div className="properties"><section><h3>Object transform</h3>
-            <NumericField label="Elevation" value={selectedFurniture.elevation} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { elevation: value }))} />
-            <NumericField label="Position X" value={selectedFurniture.position.x} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, x: value } }))} />
-            <NumericField label="Position Y" value={selectedFurniture.position.y} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, y: value } }))} />
-            <NumericField label="Width" value={selectedFurniture.width} unit="m" min={0.01} step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { width: value }))} />
-            <NumericField label="Depth" value={selectedFurniture.depth} unit="m" min={0.01} step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { depth: value }))} />
-            <NumericField label="Height" value={selectedFurniture.height} unit="m" min={0.01} step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { height: value }))} />
+            <NumericField label="Elevation" value={selectedFurniture.elevation} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { elevation: value }))} />
+            <NumericField label="Position X" value={selectedFurniture.position.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, x: value } }))} />
+            <NumericField label="Position Y" value={selectedFurniture.position.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, y: value } }))} />
+            <NumericField label="Width" value={selectedFurniture.width} unit={lengthUnit} min={0.01 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { width: value }))} />
+            <NumericField label="Depth" value={selectedFurniture.depth} unit={lengthUnit} min={0.01 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { depth: value }))} />
+            <NumericField label="Height" value={selectedFurniture.height} unit={lengthUnit} min={0.01 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { height: value }))} />
             <NumericField label="Rotation X" value={selectedFurniture.rotationX} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotationX: value }))} />
             <NumericField label="Rotation Y" value={selectedFurniture.rotation} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotation: value }))} />
             <NumericField label="Rotation Z" value={selectedFurniture.rotationZ} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotationZ: value }))} />
@@ -473,8 +486,8 @@ export default function App() {
             <button className="rotate-btn" aria-expanded={arraySettingsOpen} onClick={toggleArraySettings}><Copy size={14} /> Linear array</button>
             {arraySettingsOpen && <div className="array-settings" aria-label="Linear array settings">
               <NumericField label="Copies" value={arrayCopies} unit="items" min={1} step={1} onCommit={setArrayCopies} />
-              <NumericField label="Spacing X" value={arrayOffsetX} unit="m" step={0.1} onCommit={setArrayOffsetX} />
-              <NumericField label="Spacing Y" value={arrayOffsetY} unit="m" step={0.1} onCommit={setArrayOffsetY} />
+              <NumericField label="Spacing X" value={arrayOffsetX} unit={lengthUnit} step={0.1 * metresToProjectUnits} onCommit={setArrayOffsetX} />
+              <NumericField label="Spacing Y" value={arrayOffsetY} unit={lengthUnit} step={0.1 * metresToProjectUnits} onCommit={setArrayOffsetY} />
               <div className="array-actions"><button className="array-cancel" onClick={() => setArraySettingsOpen(false)}>Cancel</button><button className="array-apply" onClick={createSelectedFurnitureArray}>Create array</button></div>
               <small>Spacing is applied between each successive copy. Up to 100 copies.</small>
             </div>}
@@ -495,30 +508,32 @@ function Rail({ icon, label, active, onClick, disabled = false, title }: { icon:
 }
 
 function previewBounds(project: DesignProject) {
+  const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
   const points = [
     ...project.rooms.flatMap((room) => room.points),
     ...project.walls.flatMap((wall) => [wall.start, wall.end]),
     ...project.furniture.map((item) => item.position),
   ];
-  if (!points.length) return { minX: -4, minY: -2, width: 8, height: 4 };
-  const padding = 0.05;
+  if (!points.length) return { minX: -4 * unitsPerMetre, minY: -2 * unitsPerMetre, width: 8 * unitsPerMetre, height: 4 * unitsPerMetre };
+  const padding = 0.05 * unitsPerMetre;
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
   const rawMinX = Math.min(...xs) - padding;
   const rawMaxX = Math.max(...xs) + padding;
   const rawMinY = Math.min(...ys) - padding;
   const rawMaxY = Math.max(...ys) + padding;
-  const width = Math.max(8, rawMaxX - rawMinX);
-  const height = Math.max(4, rawMaxY - rawMinY);
+  const width = Math.max(8 * unitsPerMetre, rawMaxX - rawMinX);
+  const height = Math.max(4 * unitsPerMetre, rawMaxY - rawMinY);
   const centerX = (rawMinX + rawMaxX) / 2;
   const centerY = (rawMinY + rawMaxY) / 2;
-  return { minX: centerX - width / 2, minY: centerY - height / 2 - 0.19, width, height };
+  return { minX: centerX - width / 2, minY: centerY - height / 2 - 0.19 * unitsPerMetre, width, height };
 }
 
 function MapPreview({ project, view, onSet3d, onSet2d, onSelectRoom }: { project: DesignProject; view: ViewMode; onSet3d: () => void; onSet2d: () => void; onSelectRoom: (roomId: string) => void }) {
   const [openMenu, setOpenMenu] = useState<'view' | 'room' | null>(null);
   const bounds = previewBounds(project);
   const viewBox = `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`;
+  const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
   const fontSize = Math.min(bounds.width, bounds.height) * 0.0875;
   const pointsAttribute = (points: readonly Point[]) => points.map((point) => `${point.x},${point.y}`).join(' ');
   const center = (points: readonly Point[]): Point => points.reduce(
@@ -532,9 +547,9 @@ function MapPreview({ project, view, onSet3d, onSet2d, onSelectRoom }: { project
       {project.walls.map((wall) => <line key={wall.id} className="map-wall" x1={wall.start.x} y1={wall.start.y} x2={wall.end.x} y2={wall.end.y} strokeWidth={Math.max(0.05, wall.thickness * 0.55)} />)}
       {project.rooms.map((room) => {
         const centroid = center(room.points);
-        const referenceOffset = room.name === 'Living Room' ? { x: 0.28, y: -0.11 } : { x: 0, y: 0 };
+        const referenceOffset = room.name === 'Living Room' ? { x: 0.28 * unitsPerMetre, y: -0.11 * unitsPerMetre } : { x: 0, y: 0 };
         const label = { x: centroid.x + referenceOffset.x, y: centroid.y + referenceOffset.y };
-        const referenceWidth = room.name === 'Lobby' ? 1.149 : room.name === 'Living Room' ? 2.567 : undefined;
+        const referenceWidth = room.name === 'Lobby' ? 1.149 * unitsPerMetre : room.name === 'Living Room' ? 2.567 * unitsPerMetre : undefined;
         return <text key={`${room.id}-label`} className="map-room-label" x={label.x} y={label.y} textAnchor="middle" dominantBaseline="central" fontSize={fontSize} textLength={referenceWidth} lengthAdjust={referenceWidth ? 'spacingAndGlyphs' : undefined}>{room.name}</text>;
       })}
     </svg>

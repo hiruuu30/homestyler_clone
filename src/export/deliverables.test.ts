@@ -104,7 +104,7 @@ describe('independent project deliverables', () => {
     expect(csv.endsWith('\r\n')).toBe(true);
   });
 
-  it('converts imperial project values into accurately labeled metric SVG and CSV data', () => {
+  it('exports imperial projects as accurately labeled metric SVG and CSV data', () => {
     const project = createStarterProject('imperial-project', 'Imperial Room', 'ft');
     const svg = exportPlanSvg(project);
     const rows = parseCsv(exportQuantitiesCsv(project));
@@ -112,9 +112,9 @@ describe('independent project deliverables', () => {
     const wall = rows.find((row) => row[0] === 'wall' && row[1] === 'wall-north');
     const svgWall = new DOMParser().parseFromString(svg, 'image/svg+xml').getElementsByTagNameNS('http://www.w3.org/2000/svg', 'line');
     expect(svg).toContain('data-units="m"');
-    expect(Array.from(svgWall).find((element) => element.getAttribute('id') === 'wall-north')?.getAttribute('data-length-m')).toBe('0.6096');
-    expect(room?.[5]).toBe('0.483096');
-    expect(wall?.[6]).toBe('0.6096');
+    expect(Array.from(svgWall).find((element) => element.getAttribute('id') === 'wall-north')?.getAttribute('data-length-m')).toBe('2');
+    expect(room?.[5]).toBe('5.2');
+    expect(wall?.[6]).toBe('2');
   });
 
   it('fits rotated furniture into the SVG drawing bounds', () => {
