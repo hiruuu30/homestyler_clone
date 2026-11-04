@@ -369,12 +369,18 @@ export function addWall(project: DesignProject, input: Wall): DesignProject {
     const intersection = properSegmentIntersection(wall.start, wall.end, candidate.start, candidate.end);
     return intersection ? [{ wallId: candidate.id, ...intersection }] : [];
   });
-  if (crossings.length > 1) throw new RangeError('adding a wall through multiple wall crossings is not supported yet');
   let next = copyProject(project, { walls: [...project.walls, wall] });
-  if (crossings.length === 1) {
-    const crossing = crossings[0];
+  for (const crossing of crossings) {
     next = splitWall(next, crossing.wallId, crossing.otherFraction);
-    next = splitWall(next, wall.id, crossing.fraction);
+  }
+  const cutFractions = crossings
+    .map((crossing) => crossing.fraction)
+    .sort((left, right) => right - left)
+    .filter((fraction, index, values) => index === 0 || Math.abs(fraction - values[index - 1]) > SEGMENT_PARAMETER_EPSILON);
+  let currentEndFraction = 1;
+  for (const fraction of cutFractions) {
+    next = splitWall(next, wall.id, fraction / currentEndFraction);
+    currentEndFraction = fraction;
   }
   for (const endpoint of [wall.start, wall.end]) {
     while (true) {

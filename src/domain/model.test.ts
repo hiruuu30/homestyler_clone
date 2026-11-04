@@ -319,7 +319,7 @@ describe('domain model', () => {
     expect(project.walls).toEqual([host]);
   });
 
-  it('keeps cross-floor and parallel disjoint walls independent but rejects collinear overlap', () => {
+  it('keeps cross-floor and parallel disjoint walls independent, rejects overlap, and normalizes multiple crossings', () => {
     const base = createStarterProject();
     const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
     const project = { ...base, walls: [host], rooms: [] };
@@ -329,9 +329,22 @@ describe('domain model', () => {
     expect(parallel.walls).toHaveLength(2);
     expect(() => addWall(project, createWall('overlap', { x: 2, y: 0 }, { x: 5, y: 0 }))).toThrow(/cannot overlap/);
     const twoHosts = { ...project, walls: [host, createWall('host-2', { x: 0, y: 2 }, { x: 4, y: 2 })] };
-    expect(() => addWall(twoHosts, createWall('through-both', { x: 2, y: -1 }, { x: 2, y: 3 }))).toThrow(/multiple wall crossings/);
+    const throughBoth = addWall(twoHosts, createWall('through-both', { x: 2, y: -1 }, { x: 2, y: 3 }));
+    expect(throughBoth.walls).toHaveLength(7);
+    expect(throughBoth.walls.find((wall) => wall.id === 'host')).toMatchObject({ start: { x: 0, y: 0 }, end: { x: 2, y: 0 } });
+    expect(throughBoth.walls.find((wall) => wall.id === 'wall-1')).toMatchObject({ start: { x: 2, y: 0 }, end: { x: 4, y: 0 } });
+    expect(throughBoth.walls.find((wall) => wall.id === 'host-2')).toMatchObject({ start: { x: 0, y: 2 }, end: { x: 2, y: 2 } });
+    expect(throughBoth.walls.find((wall) => wall.id === 'wall-2')).toMatchObject({ start: { x: 2, y: 2 }, end: { x: 4, y: 2 } });
+    expect(throughBoth.walls.find((wall) => wall.id === 'through-both')).toMatchObject({ start: { x: 2, y: -1 }, end: { x: 2, y: 0 } });
+    expect(throughBoth.walls.find((wall) => wall.id === 'wall-4')).toMatchObject({ start: { x: 2, y: 0 }, end: { x: 2, y: 2 } });
+    expect(throughBoth.walls.find((wall) => wall.id === 'wall-3')).toMatchObject({ start: { x: 2, y: 2 }, end: { x: 2, y: 3 } });
     expect(twoHosts.walls).toHaveLength(2);
     expect(project.walls).toEqual([host]);
+    const openingOnSecondHost = addWallOpening(twoHosts, 'host-2', 'window');
+    expect(() => addWall(openingOnSecondHost, createWall('through-both', { x: 2, y: -1 }, { x: 2, y: 3 })))
+      .toThrow(/cannot split a wall through an opening/);
+    expect(openingOnSecondHost.walls).toHaveLength(2);
+    expect(openingOnSecondHost.wallOpenings[0].wallId).toBe('host-2');
   });
 
   it('reassigns openings on one side of an X crossing and atomically rejects a crossing through an opening', () => {
