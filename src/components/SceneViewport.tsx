@@ -31,12 +31,14 @@ function addBox(
   color: string,
   id: string,
   rotation = 0,
+  rotationX = 0,
+  rotationZ = 0,
 ): THREE.Mesh {
   const geometry = new THREE.BoxGeometry(...dimensions);
   const material = new THREE.MeshStandardMaterial({ color });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(...position);
-  mesh.rotation.y = -rotation * (Math.PI / 180);
+  mesh.rotation.set(rotationX * (Math.PI / 180), -rotation * (Math.PI / 180), rotationZ * (Math.PI / 180));
   mesh.userData.selectionId = id;
   scene.add(mesh);
   return mesh;
@@ -116,7 +118,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
     });
 
     project.furniture.forEach((item) => {
-      const mesh = addBox(scene, [item.width, item.height, item.depth], [item.position.x, floorElevation + item.elevation + item.height / 2, -item.position.y], item.color || '#a78362', item.id, item.rotation);
+      const mesh = addBox(scene, [item.width, item.height, item.depth], [item.position.x, floorElevation + item.elevation + item.height / 2, -item.position.y], item.color || '#a78362', item.id, item.rotation, item.rotationX, item.rotationZ);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
     });

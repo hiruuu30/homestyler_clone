@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { snapPlanPoint } from '../domain/snapping';
 import type { DesignProject, FurnitureInstance, Point, ToolMode } from '../domain/types';
 
 export type PlanCanvasProps = {
@@ -51,6 +52,14 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   const bounds = projectBounds(project);
   const viewBox = `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`;
 
+  const snapDistance = () => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || !rect.width || !rect.height) return 0.2;
+    const worldPerPixel = Math.max(bounds.width / rect.width, bounds.height / rect.height);
+    return Math.max(0.1, Math.min(0.25, worldPerPixel * 12));
+  };
+  const snapPoint = (point: Point) => snapPlanPoint(project, point, snapDistance());
+
   const modelPoint = (clientX: number, clientY: number): Point | null => {
     const svg = svgRef.current;
     const matrix = svg?.getScreenCTM();
@@ -75,26 +84,30 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   };
 
   const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const backgroundTarget = event.target === event.currentTarget
+      || (event.target instanceof SVGElement && event.target.classList.contains('plan-grid'));
     if (tool !== 'room' && tool !== 'wall') {
-      if (event.target === event.currentTarget) onSelect(null);
+      if (backgroundTarget) onSelect(null);
       return;
     }
-    if (event.target !== event.currentTarget) return;
-    const start = modelPoint(event.clientX, event.clientY);
-    if (!start) return;
+    if (!backgroundTarget) return;
+    const rawStart = modelPoint(event.clientX, event.clientY);
+    if (!rawStart) return;
+    const start = snapPoint(rawStart);
     capture(event);
     setDrag({ mode: 'create', start, current: start });
   };
 
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!drag) return;
-    const current = modelPoint(event.clientX, event.clientY);
-    if (current) setDrag({ ...drag, current });
+    const point = modelPoint(event.clientX, event.clientY);
+    if (point) setDrag({ ...drag, current: drag.mode === 'create' ? snapPoint(point) : point });
   };
 
   const finishDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (!drag) return;
-    const end = modelPoint(event.clientX, event.clientY) ?? drag.current;
+    const point = modelPoint(event.clientX, event.clientY) ?? drag.current;
+    const end = drag.mode === 'create' ? snapPoint(point) : point;
     if (drag.mode === 'create') {
       if (distance(end, drag.start) > 0.05) {
         if (tool === 'room') onCreateRoom(drag.start, end);

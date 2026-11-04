@@ -14,6 +14,7 @@ import {
   removeWall,
   roomArea,
   rotateFurniture,
+  splitWall,
   updateFurniture,
   updateWallHeight,
   updateWallThickness,
@@ -87,6 +88,7 @@ describe('domain model', () => {
     const withFurniture = addFurniture(project, furniture);
     const rotated = rotateFurniture(withFurniture, 'chair-1', 45);
     expect(withFurniture.furniture).toHaveLength(1);
+    expect(withFurniture.furniture[0]).toMatchObject({ rotationX: 0, rotationZ: 0 });
     expect(rotated.furniture[0]).toMatchObject({ id: 'chair-1', position: { x: 1, y: 1 }, rotation: 45 });
     expect(project.furniture).toHaveLength(0);
   });
@@ -131,12 +133,22 @@ describe('domain model', () => {
     expect(() => updateFurniture(project, 'chair-1', { elevation: Number.NaN })).toThrow(/finite/);
   });
 
+  it('updates axial furniture rotations immutably and rejects non-finite angles', () => {
+    const project = addFurniture(createStarterProject(), furniture);
+    const updated = updateFurniture(project, 'chair-1', { rotationX: 12, rotationZ: -8 });
+
+    expect(updated.furniture[0]).toMatchObject({ rotationX: 12, rotationZ: -8 });
+    expect(project.furniture[0]).toMatchObject({ rotationX: 0, rotationZ: 0 });
+    expect(() => updateFurniture(project, 'chair-1', { rotationX: Number.NaN })).toThrow(/finite/);
+    expect(() => updateFurniture(project, 'chair-1', { rotationZ: Number.POSITIVE_INFINITY })).toThrow(/finite/);
+  });
+
   it('migrates saved furniture without an elevation field to floor level', () => {
     const project = addFurniture(createStarterProject(), furniture);
-    const { elevation: _elevation, ...legacyFurniture } = project.furniture[0];
+    const { elevation: _elevation, rotationX: _rotationX, rotationZ: _rotationZ, ...legacyFurniture } = project.furniture[0];
     const migrated = normalizeProject({ ...project, furniture: [legacyFurniture] });
 
-    expect(migrated.furniture[0].elevation).toBe(0);
+    expect(migrated.furniture[0]).toMatchObject({ elevation: 0, rotationX: 0, rotationZ: 0 });
   });
 
   it('duplicates furniture with a fresh ID and a small placement offset', () => {
@@ -162,6 +174,25 @@ describe('domain model', () => {
     expect(withoutWall.rooms).toHaveLength(project.rooms.length);
     expect(project.furniture).toHaveLength(1);
     expect(project.walls).toHaveLength(7);
+  });
+
+  it('splits a wall into contiguous segments while preserving properties and the original project', () => {
+    const project = createStarterProject();
+    const original = project.walls.find((wall) => wall.id === 'wall-north')!;
+    const split = splitWall(project, original.id);
+    const first = split.walls.find((wall) => wall.id === original.id)!;
+    const second = split.walls.find((wall) => wall.id !== original.id && wall.start.x === 5.2 && wall.start.y === -0.5)!;
+
+    expect(split.walls).toHaveLength(project.walls.length + 1);
+    expect(first.end).toEqual(second.start);
+    expect(first.end).toEqual({ x: 5.2, y: -0.5 });
+    expect(first.height).toBe(original.height);
+    expect(second.thickness).toBe(original.thickness);
+    expect(first.start).toEqual(original.start);
+    expect(second.end).toEqual(original.end);
+    expect(project.walls).toHaveLength(7);
+    expect(() => splitWall(project, original.id, 0)).toThrow(/between zero and one/);
+    expect(() => splitWall(project, 'missing-wall')).toThrow(/unknown wall/);
   });
 
   it('adds a new level and makes it active at the next clear elevation', () => {

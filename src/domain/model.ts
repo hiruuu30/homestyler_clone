@@ -211,11 +211,15 @@ export function addFurniture(project: DesignProject, furniture: FurnitureInput):
   positive(furniture.height, 'furniture height');
   if (!Number.isFinite(furniture.elevation)) throw new TypeError('furniture elevation must be finite');
   if (!Number.isFinite(furniture.rotation)) throw new TypeError('furniture rotation must be finite');
+  if (furniture.rotationX !== undefined && !Number.isFinite(furniture.rotationX)) throw new TypeError('furniture X rotation must be finite');
+  if (furniture.rotationZ !== undefined && !Number.isFinite(furniture.rotationZ)) throw new TypeError('furniture Z rotation must be finite');
   if (!project.levels.some((level) => level.id === furniture.levelId)) throw new RangeError(`unknown level: ${furniture.levelId}`);
   const instance: FurnitureInstance = freeze({
     ...furniture,
     id: furniture.id ?? `furniture-${project.furniture.length + 1}`,
     position: point(furniture.position, 'furniture position'),
+    rotationX: furniture.rotationX ?? 0,
+    rotationZ: furniture.rotationZ ?? 0,
   });
   id(instance.id, 'furniture id');
   if (project.furniture.some((item) => item.id === instance.id)) throw new RangeError(`duplicate furniture id: ${instance.id}`);
@@ -255,7 +259,7 @@ export function moveFurniture(project: DesignProject, furnitureId: string, posit
   });
 }
 
-export type FurnitureChanges = Partial<Pick<FurnitureInstance, 'position' | 'elevation' | 'rotation' | 'width' | 'depth' | 'height' | 'color'>>;
+export type FurnitureChanges = Partial<Pick<FurnitureInstance, 'position' | 'elevation' | 'rotation' | 'rotationX' | 'rotationZ' | 'width' | 'depth' | 'height' | 'color'>>;
 
 export function updateFurniture(project: DesignProject, furnitureId: string, changes: FurnitureChanges): DesignProject {
   id(furnitureId, 'furniture id');
@@ -263,6 +267,8 @@ export function updateFurniture(project: DesignProject, furnitureId: string, cha
   if (changes.position !== undefined) point(changes.position, 'furniture position');
   if (changes.elevation !== undefined && !Number.isFinite(changes.elevation)) throw new TypeError('elevation must be finite');
   if (changes.rotation !== undefined && !Number.isFinite(changes.rotation)) throw new TypeError('rotation must be finite');
+  if (changes.rotationX !== undefined && !Number.isFinite(changes.rotationX)) throw new TypeError('X rotation must be finite');
+  if (changes.rotationZ !== undefined && !Number.isFinite(changes.rotationZ)) throw new TypeError('Z rotation must be finite');
   if (changes.width !== undefined) positive(changes.width, 'furniture width');
   if (changes.depth !== undefined) positive(changes.depth, 'furniture depth');
   if (changes.height !== undefined) positive(changes.height, 'furniture height');
@@ -299,6 +305,25 @@ export function removeWall(project: DesignProject, wallId: string): DesignProjec
   id(wallId, 'wall id');
   if (!project.walls.some((wall) => wall.id === wallId)) throw new RangeError(`unknown wall: ${wallId}`);
   return copyProject(project, { walls: project.walls.filter((wall) => wall.id !== wallId) });
+}
+
+export function splitWall(project: DesignProject, wallId: string, ratio = 0.5): DesignProject {
+  id(wallId, 'wall id');
+  if (!Number.isFinite(ratio) || ratio <= 0 || ratio >= 1) throw new RangeError('split ratio must be between zero and one');
+  const wall = project.walls.find((item) => item.id === wallId);
+  if (!wall) throw new RangeError(`unknown wall: ${wallId}`);
+  const splitPoint = point({
+    x: wall.start.x + (wall.end.x - wall.start.x) * ratio,
+    y: wall.start.y + (wall.end.y - wall.start.y) * ratio,
+  }, 'wall split point');
+  const usedIds = new Set(project.walls.map((item) => item.id));
+  let suffix = 1;
+  let secondWallId = `wall-${suffix}`;
+  while (usedIds.has(secondWallId)) secondWallId = `wall-${++suffix}`;
+  const first = freeze({ ...wall, end: splitPoint });
+  const second = freeze({ ...wall, id: secondWallId, start: splitPoint });
+  const walls = project.walls.flatMap((item) => item.id === wallId ? [first, second] : [item]);
+  return copyProject(project, { walls });
 }
 
 export function roomArea(room: Room): number {
@@ -343,7 +368,9 @@ export function normalizeProject(value: unknown): DesignProject {
   const furniture = candidate.furniture.map((item) => {
     const raw = item as Partial<FurnitureInstance>;
     const elevation = Number.isFinite(raw.elevation) ? Number(raw.elevation) : 0;
-    return freeze({ ...item, elevation, levelId: levelFor(item) });
+    const rotationX = Number.isFinite(raw.rotationX) ? Number(raw.rotationX) : 0;
+    const rotationZ = Number.isFinite(raw.rotationZ) ? Number(raw.rotationZ) : 0;
+    return freeze({ ...item, elevation, rotationX, rotationZ, levelId: levelFor(item) });
   }) as FurnitureInstance[];
   const materials = candidate.materials.map((item) => copyMaterial(item as Material));
   const units = candidate.units === 'ft' ? 'ft' : 'm';

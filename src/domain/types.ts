@@ -40,6 +40,8 @@ export type FurnitureInstance = Readonly<{
   position: Point;
   elevation: number;
   rotation: number;
+  rotationX: number;
+  rotationZ: number;
   width: number;
   depth: number;
   height: number;
@@ -69,4 +71,8 @@ export type DesignProject = Readonly<{
   updatedAt: string;
 }>;
 
-export type FurnitureInput = Omit<FurnitureInstance, 'id'> & { id?: string };
+export type FurnitureInput = Omit<FurnitureInstance, 'id' | 'rotationX' | 'rotationZ'> & {
+  id?: string;
+  rotationX?: number;
+  rotationZ?: number;
+};

@@ -2,12 +2,12 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Building2, Check, ChevronDown, ChevronRight, CircleHelp, Copy, Download,
   FilePlus2, Grid2X2, Layers3, Maximize2, MousePointer2, PaintBucket, PanelLeftClose,
-  Plus, Redo2, RotateCw, Save, Search, Sofa, Square, Trash2, Undo2, Upload,
+  Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
   addFurniture, assignRoomMaterial, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
-  removeLevel as removeProjectLevel, removeWall, roomArea, rotateFurniture, updateFurniture,
+  removeLevel as removeProjectLevel, removeWall, roomArea, rotateFurniture, splitWall as splitProjectWall, updateFurniture,
   updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
@@ -165,6 +165,11 @@ export default function App() {
     else if (selectedWall) commit(removeWall(project, selectedWall.id));
     else return;
     setSelectedId(null);
+  }
+  function splitSelectedWall() {
+    if (!selectedWall) return;
+    commit(splitProjectWall(project, selectedWall.id));
+    notify('Wall split at midpoint · Undo to restore');
   }
   function applyMaterial(materialId: string) {
     const room = selectedRoom ?? visibleProject.rooms[0];
@@ -329,7 +334,7 @@ export default function App() {
             {view === 'plan'
               ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} />
               : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
-            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room' : tool === 'wall' ? 'Drag to add a wall segment' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
+            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
           </div>
           <footer className="bottom-bar">
             <div className="canvas-tools"><button className={tool === 'select' ? 'chosen' : ''} title="Select" onClick={() => setTool('select')}><MousePointer2 size={16} /></button><button className={tool === 'room' ? 'chosen' : ''} title="Draw room" onClick={() => { setView('plan'); setTool('room'); }}><Square size={16} /></button><button className={tool === 'wall' ? 'chosen' : ''} title="Draw wall" onClick={() => { setView('plan'); setTool('wall'); }}><Grid2X2 size={16} /></button><button title="Add sofa" onClick={() => { setPanel('furniture'); addSofa(); }}><Sofa size={16} /></button></div>
@@ -359,6 +364,7 @@ export default function App() {
               <label>Size<div className="unit-input"><input readOnly value={distance(selectedWall.start, selectedWall.end).toFixed(2)} /><span>{project.units}</span></div></label>
               <NumericField label="Wall height" value={selectedWall.height} unit={project.units} min={0.1} step={0.05} onCommit={(value) => commit(updateWallHeight(project, selectedWall.id, value))} />
               <NumericField label="Thickness" value={selectedWall.thickness} unit={project.units} min={0.05} step={0.01} onCommit={(value) => commit(updateWallThickness(project, selectedWall.id, value))} />
+              <button className="rotate-btn" onClick={splitSelectedWall}><Scissors size={14} /> Split wall at midpoint</button>
               <button className="rotate-btn danger-action wall-delete" onClick={deleteSelected}><Trash2 size={14} /> Delete wall</button>
             </div></section>
           </div>}
@@ -369,7 +375,9 @@ export default function App() {
             <NumericField label="Width" value={selectedFurniture.width} unit="m" min={0.01} step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { width: value }))} />
             <NumericField label="Depth" value={selectedFurniture.depth} unit="m" min={0.01} step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { depth: value }))} />
             <NumericField label="Height" value={selectedFurniture.height} unit="m" min={0.01} step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { height: value }))} />
-            <NumericField label="Rotation" value={selectedFurniture.rotation} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotation: value }))} />
+            <NumericField label="Rotation X" value={selectedFurniture.rotationX} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotationX: value }))} />
+            <NumericField label="Rotation Y" value={selectedFurniture.rotation} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotation: value }))} />
+            <NumericField label="Rotation Z" value={selectedFurniture.rotationZ} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotationZ: value }))} />
             <button className="rotate-btn" onClick={rotateSelected}><RotateCw size={15} /> Rotate 45°</button>
             <button className="rotate-btn" onClick={duplicateSelectedFurniture}><Copy size={14} /> Duplicate object</button>
             <button className="rotate-btn danger-action" onClick={deleteSelected}><Trash2 size={14} /> Delete object</button>
