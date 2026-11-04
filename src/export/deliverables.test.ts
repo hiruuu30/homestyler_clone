@@ -1,6 +1,6 @@
 import { DOMParser } from '@xmldom/xmldom';
 import { describe, expect, it } from 'vitest';
-import { addFurniture, addLevel, addWallOpening, assignWallMaterial, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateRoomFloorFinishMapping } from '../domain/model';
+import { addFurniture, addLevel, addWallOpening, assignWallMaterial, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateFurniture, updateRoomFloorFinishMapping } from '../domain/model';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './deliverables';
 
 const chair = {
@@ -108,6 +108,15 @@ describe('independent project deliverables', () => {
     expect(wall?.getAttribute('data-material-id')).toBe('material-neutral-floor');
     expect(wall?.getAttribute('stroke')).toBe('#d9c7aa');
     expect(walls.find((element) => element.getAttribute('id') === 'wall-east')?.getAttribute('stroke')).toBe('#f4f1eb');
+  });
+
+  it('exports a furniture swatch color as the object fill', () => {
+    const project = updateFurniture(addFurniture(createStarterProject(), chair), 'chair-quoted', { color: '#d9c7aa' });
+    const document = new DOMParser().parseFromString(exportPlanSvg(project), 'image/svg+xml');
+    const element = Array.from(document.getElementsByTagNameNS('http://www.w3.org/2000/svg', 'rect'))
+      .find((rect) => rect.getAttribute('id') === 'chair-quoted');
+
+    expect(element?.getAttribute('fill')).toBe('#d9c7aa');
   });
 
   it('exports all levels and quantities as escaped, parseable CSV with consistent 19-column metric rows', () => {

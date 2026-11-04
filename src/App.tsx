@@ -294,6 +294,13 @@ export default function App() {
       catch (error) { notify(error instanceof Error ? error.message : 'Could not assign this wall finish'); }
       return;
     }
+    if (selectedFurniture) {
+      const material = project.materials.find((item) => item.id === materialId);
+      if (!material) { notify('This finish is no longer available'); return; }
+      try { commit(updateFurniture(project, selectedFurniture.id, { color: material.color })); }
+      catch (error) { notify(error instanceof Error ? error.message : 'Could not color this object'); }
+      return;
+    }
     const room = selectedRoom ?? visibleProject.rooms[0];
     if (!room) { notify('Create a room first'); return; }
     commit(assignRoomMaterial(project, room.id, materialId));
@@ -597,9 +604,9 @@ export default function App() {
             <div className="panel-subnav"><button onClick={() => setPanel('furniture')}>Furniture</button><button className="active" onClick={() => setPanel('finish')}>Finish</button></div>
             <div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search starter finishes" /></div>
             <div className="section-label">STARTER MATERIALS</div>
-            <p className="finish-target">{selectedWall ? `Choose a swatch to finish ${selectedWall.id}.` : selectedRoom ? `Choose a swatch to finish ${selectedRoom.name}.` : 'Select a room or wall, then choose a finish.'}</p>
+            <p className="finish-target">{selectedWall ? `Choose a swatch to finish ${selectedWall.id}.` : selectedFurniture ? `Choose a swatch to color ${selectedFurniture.name}.` : selectedRoom ? `Choose a swatch to finish ${selectedRoom.name}.` : 'Select a room, wall, or object, then choose a finish.'}</p>
             <div className="material-grid">{project.materials.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).map((material) => <button key={material.id} className="material-card" onClick={() => applyMaterial(material.id)}><span style={{ background: material.color }} /><b>{material.name}</b></button>)}</div>
-            <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Wall assignments color the complete wall object; per-side finishes, texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
+            <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Object and wall assignments color the complete object; per-side finishes, texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
           </div>}
           {panel === 'project' && <div className="panel-scroll">
             <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects · {project.wallOpenings.length} openings</p><p>{area.toFixed(2)} {areaUnit} on {activeLevel.name}</p></div>
@@ -694,6 +701,8 @@ export default function App() {
             <button className="rotate-btn danger-action" onClick={deleteSelected}><Trash2 size={14} /> Delete opening</button>
           </section></div>}
           {selectedFurniture && <div className="properties"><section><h3>Object transform</h3>
+            <div className="current-material"><span style={{ background: selectedFurniture.color || '#b9a58e' }} />{selectedFurniture.color || 'Default color'}</div>
+            <button className="rotate-btn" onClick={() => setPanel('finish')}>Choose finish in Finishes</button>
             <NumericField label="Elevation" value={selectedFurniture.elevation} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { elevation: value }))} />
             <NumericField label="Position X" value={selectedFurniture.position.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, x: value } }))} />
             <NumericField label="Position Y" value={selectedFurniture.position.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, y: value } }))} />

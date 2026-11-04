@@ -628,6 +628,16 @@ describe('domain model', () => {
     expect(project.furniture[0]).toMatchObject({ position: { x: 1, y: 1 }, width: 0.6, rotation: 0 });
   });
 
+  it('changes only the selected furniture color without mutating the original project', () => {
+    const project = addFurniture(createStarterProject(), furniture);
+    const twoObjects = addFurniture(project, { ...furniture, id: 'chair-2', position: { x: 2, y: 2 } });
+    const colored = updateFurniture(twoObjects, 'chair-1', { color: '#d9c7aa' });
+
+    expect(colored.furniture[0].color).toBe('#d9c7aa');
+    expect(colored.furniture[1].color).toBe(twoObjects.furniture[1].color);
+    expect(twoObjects.furniture[0].color).toBe(project.furniture[0].color);
+  });
+
   it('updates furniture elevation immutably and rejects non-finite elevation values', () => {
     const project = addFurniture(createStarterProject(), furniture);
     const updated = updateFurniture(project, 'chair-1', { elevation: 0.45 });

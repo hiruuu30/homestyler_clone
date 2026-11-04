@@ -359,6 +359,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
           <g
             key={item.id}
             className={`plan-furniture${selectedId === item.id ? ' is-selected' : ''}`}
+            data-furniture-id={item.id}
             aria-label={`${item.name}, furniture object`}
             transform={`translate(${x} ${y}) rotate(${item.rotation})`}
             onPointerDown={(event) => beginFurnitureDrag(event, item)}
