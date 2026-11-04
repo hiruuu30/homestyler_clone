@@ -5,6 +5,7 @@ import {
   addWall,
   addWallOpening,
   arrayFurniture,
+  assignRoomCeilingMaterial,
   assignRoomMaterial,
   assignWallMaterial,
   createPlanUnderlay,
@@ -562,6 +563,18 @@ describe('domain model', () => {
     const updated = assignRoomMaterial(room, 'tile-blue');
     expect(updated.floorMaterialId).toBe('tile-blue');
     expect(room.floorMaterialId).toBe('material-neutral-floor');
+  });
+
+  it('assigns a known material to one room ceiling and preserves it through normalization', () => {
+    const project = createStarterProject();
+    const updated = assignRoomCeilingMaterial(project, 'room-starter', 'material-neutral-wall');
+
+    expect(updated.rooms[0]).toMatchObject({ ceilingMaterialId: 'material-neutral-wall', floorMaterialId: 'material-neutral-floor' });
+    expect(project.rooms[0].ceilingMaterialId).toBeUndefined();
+    expect(normalizeProject(JSON.parse(JSON.stringify(updated))).rooms[0].ceilingMaterialId).toBe('material-neutral-wall');
+    expect(() => assignRoomCeilingMaterial(project, '', 'material-neutral-wall')).toThrow(/room id/);
+    expect(() => assignRoomCeilingMaterial(project, 'missing-room', 'material-neutral-wall')).toThrow(/unknown room/);
+    expect(() => assignRoomCeilingMaterial(project, 'room-starter', 'missing-material')).toThrow(/unknown material/);
   });
 
   it('assigns a known material to only the selected wall without mutating the project', () => {

@@ -1,6 +1,6 @@
 import { DOMParser } from '@xmldom/xmldom';
 import { describe, expect, it } from 'vitest';
-import { addFurniture, addLevel, addWallOpening, assignWallMaterial, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateFurniture, updateRoomFloorFinishMapping } from '../domain/model';
+import { addFurniture, addLevel, addWallOpening, assignRoomCeilingMaterial, assignWallMaterial, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateFurniture, updateRoomFloorFinishMapping } from '../domain/model';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './deliverables';
 
 const chair = {
@@ -108,6 +108,16 @@ describe('independent project deliverables', () => {
     expect(wall?.getAttribute('data-material-id')).toBe('material-neutral-floor');
     expect(wall?.getAttribute('stroke')).toBe('#d9c7aa');
     expect(walls.find((element) => element.getAttribute('id') === 'wall-east')?.getAttribute('stroke')).toBe('#f4f1eb');
+  });
+
+  it('exports the assigned room ceiling material identity without changing its floor fill', () => {
+    const project = assignRoomCeilingMaterial(createStarterProject(), 'room-starter', 'material-neutral-wall');
+    const document = new DOMParser().parseFromString(exportPlanSvg(project), 'image/svg+xml');
+    const room = Array.from(document.getElementsByTagNameNS('http://www.w3.org/2000/svg', 'path'))
+      .find((path) => path.getAttribute('id') === 'room-starter');
+
+    expect(room?.getAttribute('data-ceiling-material-id')).toBe('material-neutral-wall');
+    expect(room?.getAttribute('fill')).toBe('#d9c7aa');
   });
 
   it('exports a furniture swatch color as the object fill', () => {

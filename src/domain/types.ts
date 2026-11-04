@@ -33,6 +33,7 @@ export type Room = Readonly<{
   holes?: readonly (readonly Point[])[];
   floorMaterialId: string;
   ceilingVisible: boolean;
+  ceilingMaterialId?: string;
   floorFinish?: FloorFinishMapping;
   levelId: string;
 }>;

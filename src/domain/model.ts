@@ -941,6 +941,17 @@ export function assignRoomMaterial(
   return freeze({ ...subject, floorMaterialId: materialId });
 }
 
+/** Assign one known project material to a single room ceiling. */
+export function assignRoomCeilingMaterial(project: DesignProject, roomId: string, materialId: string): DesignProject {
+  const targetRoomId = id(roomId, 'room id');
+  const targetMaterialId = id(materialId, 'material id');
+  if (!project.rooms.some((room) => room.id === targetRoomId)) throw new RangeError(`unknown room: ${targetRoomId}`);
+  if (!project.materials.some((material) => material.id === targetMaterialId)) throw new RangeError(`unknown material: ${targetMaterialId}`);
+  return copyProject(project, {
+    rooms: project.rooms.map((room) => room.id === targetRoomId ? freeze({ ...room, ceilingMaterialId: targetMaterialId }) : room),
+  });
+}
+
 /** Assign one known project material to the complete wall object. */
 export function assignWallMaterial(project: DesignProject, wallId: string, materialId: string): DesignProject {
   const targetWallId = id(wallId, 'wall id');

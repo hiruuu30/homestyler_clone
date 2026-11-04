@@ -200,7 +200,7 @@ export function exportPlanSvg(project: DesignProject, levelId = project.activeLe
     const color = materialColor(project, room.floorMaterialId, '#eee9df');
     const spec = floorPatternSpec(room.id, mapping, color, 'm');
     const fill = spec ? `url(#${spec.id})` : color;
-    parts.push(`<path id="${xml(room.id)}" data-kind="room" data-area-m2="${number(roomArea(room))}" data-floor-pattern="${mapping.pattern}" data-floor-rotation-deg="${number(mapping.rotation)}" data-floor-offset-x-m="${number(mapping.offsetX)}" data-floor-offset-y-m="${number(mapping.offsetY)}" data-floor-scale-x="${number(mapping.scaleX)}" data-floor-scale-y="${number(mapping.scaleY)}" d="${roomPath(room)}" fill="${xml(fill)}" fill-opacity="0.62" fill-rule="evenodd"/>`);
+    parts.push(`<path id="${xml(room.id)}" data-kind="room" data-area-m2="${number(roomArea(room))}" data-ceiling-material-id="${xml(room.ceilingMaterialId ?? '')}" data-floor-pattern="${mapping.pattern}" data-floor-rotation-deg="${number(mapping.rotation)}" data-floor-offset-x-m="${number(mapping.offsetX)}" data-floor-offset-y-m="${number(mapping.offsetY)}" data-floor-scale-x="${number(mapping.scaleX)}" data-floor-scale-y="${number(mapping.scaleY)}" d="${roomPath(room)}" fill="${xml(fill)}" fill-opacity="0.62" fill-rule="evenodd"/>`);
   }
   parts.push('</g>', '<g class="walls" fill="none" stroke="#50565e" stroke-linecap="square" stroke-linejoin="round">');
   for (const wall of walls) {

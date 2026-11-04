@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import {
   addFurniture, addRoomHole, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
-  addLevel as addProjectLevel, assignWallMaterial, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
+  addLevel as addProjectLevel, assignRoomCeilingMaterial, assignWallMaterial, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomFloorFinishMapping,
   findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
@@ -54,6 +54,7 @@ export default function App() {
   const [view, setView] = useState<ViewMode>('plan');
   const [cameraFitRequest, setCameraFitRequest] = useState(0);
   const [panel, setPanel] = useState<PanelMode>('build');
+  const [finishTarget, setFinishTarget] = useState<'floor' | 'ceiling'>('floor');
   const [tool, setTool] = useState<ToolMode>('select');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saved, setSaved] = useState(true);
@@ -84,6 +85,7 @@ export default function App() {
   const selectedOpening = visibleProject.wallOpenings.find((item) => item.id === selectedId) ?? null;
   const area = useMemo(() => visibleProject.rooms.reduce((sum, room) => sum + roomArea(room), 0), [visibleProject.rooms]);
   const selectedMaterial = selectedRoom ? project.materials.find((item) => item.id === selectedRoom.floorMaterialId) : null;
+  const selectedCeilingMaterial = selectedRoom?.ceilingMaterialId ? project.materials.find((item) => item.id === selectedRoom.ceilingMaterialId) : null;
   const selectedWallMaterial = selectedWall ? project.materials.find((item) => item.id === selectedWall.materialId) : null;
   const selectedFloorFinish = selectedRoom ? floorFinishForRoom(selectedRoom) : null;
   const lengthUnit = project.units;
@@ -303,7 +305,9 @@ export default function App() {
     }
     const room = selectedRoom ?? visibleProject.rooms[0];
     if (!room) { notify('Create a room first'); return; }
-    commit(assignRoomMaterial(project, room.id, materialId));
+    commit(selectedRoom && finishTarget === 'ceiling'
+      ? assignRoomCeilingMaterial(project, room.id, materialId)
+      : assignRoomMaterial(project, room.id, materialId));
     setSelectedId(room.id);
   }
   function editSelectedRoomFloorFinish(changes: Partial<FloorFinishMapping>): boolean {
@@ -604,9 +608,10 @@ export default function App() {
             <div className="panel-subnav"><button onClick={() => setPanel('furniture')}>Furniture</button><button className="active" onClick={() => setPanel('finish')}>Finish</button></div>
             <div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search starter finishes" /></div>
             <div className="section-label">STARTER MATERIALS</div>
-            <p className="finish-target">{selectedWall ? `Choose a swatch to finish ${selectedWall.id}.` : selectedFurniture ? `Choose a swatch to color ${selectedFurniture.name}.` : selectedRoom ? `Choose a swatch to finish ${selectedRoom.name}.` : 'Select a room, wall, or object, then choose a finish.'}</p>
+            {selectedRoom && <div className="panel-subnav"><button className={finishTarget === 'floor' ? 'active' : ''} onClick={() => setFinishTarget('floor')}>Floor</button><button className={finishTarget === 'ceiling' ? 'active' : ''} onClick={() => setFinishTarget('ceiling')}>Ceiling</button></div>}
+            <p className="finish-target">{selectedWall ? `Choose a swatch to finish ${selectedWall.id}.` : selectedFurniture ? `Choose a swatch to color ${selectedFurniture.name}.` : selectedRoom ? `Choose a swatch for the ${finishTarget} of ${selectedRoom.name}.` : 'Select a room, wall, or object, then choose a finish.'}</p>
             <div className="material-grid">{project.materials.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).map((material) => <button key={material.id} className="material-card" onClick={() => applyMaterial(material.id)}><span style={{ background: material.color }} /><b>{material.name}</b></button>)}</div>
-            <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Object and wall assignments color the complete object; per-side finishes, texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
+            <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Ceiling, object and wall assignments color complete surfaces or objects; per-side finishes, texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
           </div>}
           {panel === 'project' && <div className="panel-scroll">
             <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects · {project.wallOpenings.length} openings</p><p>{area.toFixed(2)} {areaUnit} on {activeLevel.name}</p></div>
@@ -657,6 +662,9 @@ export default function App() {
               <label>Room name<input value={selectedRoom.name} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, name: event.target.value } : room) })} /></label>
               <label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} ${areaUnit}`} /></label>
               <label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label>
+              <button className="rotate-btn" onClick={() => { setFinishTarget('floor'); setPanel('finish'); }}>Choose floor finish in Finishes</button>
+              <label>Ceiling finish<div className="current-material"><span style={{ background: selectedCeilingMaterial?.color ?? '#faf9f6' }} />{selectedCeilingMaterial?.name ?? 'Default ceiling'}</div></label>
+              <button className="rotate-btn" onClick={() => { setFinishTarget('ceiling'); setPanel('finish'); }}>Choose ceiling finish in Finishes</button>
             </section>
             <section className="floor-finish-mapping"><h3>Floor finish mapping</h3>
               <label className="mapping-select-label">Pattern<select className="mapping-select" value={selectedFloorFinish?.pattern ?? 'none'} onChange={(event) => editSelectedRoomFloorFinish({ pattern: event.target.value as FloorFinishMapping['pattern'] })}>

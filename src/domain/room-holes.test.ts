@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import {
   addRoomHole, convertProjectUnits, createPolygonRoom, createPolygonRoomWithHoles,
   createStarterProject, createWall, normalizeProject, removeRoomHole, repairWallTopology, roomArea, updateWallEndpoints,
@@ -82,13 +83,18 @@ describe('room floor holes', () => {
     expect(ceilingElevationForLevel({ elevation: 3.2, height: 2.7 })).toBeCloseTo(5.9, 8);
     expect(ceilingElevationForLevel()).toBe(2.4);
     const visibleRoom = createPolygonRoom('visible', 'Visible room', outer);
+    const coloredRoom = { ...visibleRoom, ceilingMaterialId: 'material-ceiling' };
     const hiddenRoom = { ...visibleRoom, id: 'hidden', ceilingVisible: false };
-    const meshes = createVisibleRoomCeilings([visibleRoom, hiddenRoom], 5.9);
+    const material = { id: 'material-ceiling', name: 'Ceiling tint', category: 'ceiling', color: '#d9c7aa' };
+    const meshes = createVisibleRoomCeilings([coloredRoom, hiddenRoom], 5.9, [material]);
     expect(meshes).toHaveLength(1);
     expect(meshes[0].position.y).toBe(5.9);
     expect(meshes[0].material).toMatchObject({ transparent: true, opacity: 0.18 });
+    expect((meshes[0].material as THREE.MeshStandardMaterial).color.getHexString()).toBe('d9c7aa');
+    const legacyMesh = createVisibleRoomCeilings([visibleRoom], 5.9)[0];
+    expect((legacyMesh.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('faf9f6');
     expect(() => createVisibleRoomCeilings([visibleRoom], Number.NaN)).toThrow(/finite/);
-    meshes.forEach((mesh) => {
+    [...meshes, legacyMesh].forEach((mesh) => {
       mesh.geometry.dispose();
       (mesh.material as { dispose: () => void }).dispose();
     });
