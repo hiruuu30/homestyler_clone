@@ -86,6 +86,47 @@ function segmentFraction(pointValue: Point, start: Point, end: Point, tolerance 
   return fraction;
 }
 
+const SEGMENT_PARAMETER_EPSILON = 1e-8;
+const SEGMENT_DISTANCE_EPSILON = 1e-8;
+
+/** Return strict interior parameters for a proper X crossing; endpoint contacts are not X crossings. */
+function properSegmentIntersection(
+  start: Point,
+  end: Point,
+  otherStart: Point,
+  otherEnd: Point,
+): { fraction: number; otherFraction: number } | null {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const otherDx = otherEnd.x - otherStart.x;
+  const otherDy = otherEnd.y - otherStart.y;
+  const offsetX = otherStart.x - start.x;
+  const offsetY = otherStart.y - start.y;
+  const denominator = dx * otherDy - dy * otherDx;
+  const parallelTolerance = 1e-12 * Math.hypot(dx, dy) * Math.hypot(otherDx, otherDy);
+
+  if (Math.abs(denominator) <= parallelTolerance) {
+    const distance = Math.abs(dx * offsetY - dy * offsetX) / Math.hypot(dx, dy);
+    if (distance <= SEGMENT_DISTANCE_EPSILON) {
+      const lengthSquared = dx * dx + dy * dy;
+      const first = (offsetX * dx + offsetY * dy) / lengthSquared;
+      const second = ((otherEnd.x - start.x) * dx + (otherEnd.y - start.y) * dy) / lengthSquared;
+      const overlapStart = Math.max(0, Math.min(first, second));
+      const overlapEnd = Math.min(1, Math.max(first, second));
+      if (overlapEnd - overlapStart > SEGMENT_PARAMETER_EPSILON) {
+        throw new RangeError('new wall cannot overlap an existing wall');
+      }
+    }
+    return null;
+  }
+
+  const fraction = (offsetX * otherDy - offsetY * otherDx) / denominator;
+  const otherFraction = (offsetX * dy - offsetY * dx) / denominator;
+  if (fraction <= SEGMENT_PARAMETER_EPSILON || fraction >= 1 - SEGMENT_PARAMETER_EPSILON
+    || otherFraction <= SEGMENT_PARAMETER_EPSILON || otherFraction >= 1 - SEGMENT_PARAMETER_EPSILON) return null;
+  return { fraction, otherFraction };
+}
+
 function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
   const epsilon = 1e-9;
   const abC = cross(a, b, c);
@@ -323,7 +364,18 @@ export function addWall(project: DesignProject, input: Wall): DesignProject {
   id(input.id, 'wall id');
   if (project.walls.some((wall) => wall.id === input.id)) throw new RangeError(`wall ID already exists: ${input.id}`);
   const wall = createWall(input.id, input.start, input.end, input.thickness, input.height, input.materialId, input.levelId, project.units);
+  const crossings = project.walls.flatMap((candidate) => {
+    if (candidate.levelId !== wall.levelId) return [];
+    const intersection = properSegmentIntersection(wall.start, wall.end, candidate.start, candidate.end);
+    return intersection ? [{ wallId: candidate.id, ...intersection }] : [];
+  });
+  if (crossings.length > 1) throw new RangeError('adding a wall through multiple wall crossings is not supported yet');
   let next = copyProject(project, { walls: [...project.walls, wall] });
+  if (crossings.length === 1) {
+    const crossing = crossings[0];
+    next = splitWall(next, crossing.wallId, crossing.otherFraction);
+    next = splitWall(next, wall.id, crossing.fraction);
+  }
   for (const endpoint of [wall.start, wall.end]) {
     while (true) {
       const host = next.walls.find((candidate) => candidate.id !== wall.id

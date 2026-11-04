@@ -305,6 +305,50 @@ describe('domain model', () => {
     expect(() => addWall(project, boundary)).toThrow(/already exists/);
   });
 
+  it('splits both walls at a same-level X crossing and preserves wall properties immutably', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 4 }, 0.2, 3.1, 'brick', 'floor-ground');
+    const project = { ...base, walls: [host], rooms: [] };
+    const added = addWall(project, createWall('crossing', { x: 0, y: 4 }, { x: 4, y: 0 }, 0.18, 2.8, 'glass', 'floor-ground'));
+
+    expect(added.walls).toHaveLength(4);
+    expect(added.walls.find((wall) => wall.id === 'host')).toMatchObject({ start: host.start, end: { x: 2, y: 2 }, thickness: 0.2, height: 3.1, materialId: 'brick' });
+    expect(added.walls.find((wall) => wall.id === 'wall-1')).toMatchObject({ start: { x: 2, y: 2 }, end: host.end, thickness: 0.2, height: 3.1, materialId: 'brick' });
+    expect(added.walls.find((wall) => wall.id === 'crossing')).toMatchObject({ start: { x: 0, y: 4 }, end: { x: 2, y: 2 }, thickness: 0.18, height: 2.8, materialId: 'glass' });
+    expect(added.walls.find((wall) => wall.id === 'wall-2')).toMatchObject({ start: { x: 2, y: 2 }, end: { x: 4, y: 0 }, thickness: 0.18, height: 2.8, materialId: 'glass' });
+    expect(project.walls).toEqual([host]);
+  });
+
+  it('keeps cross-floor and parallel disjoint walls independent but rejects collinear overlap', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const project = { ...base, walls: [host], rooms: [] };
+    const upstairs = addWall(project, createWall('upstairs', { x: 2, y: -2 }, { x: 2, y: 2 }, undefined, undefined, undefined, 'floor-upper'));
+    expect(upstairs.walls).toHaveLength(2);
+    const parallel = addWall(project, createWall('parallel', { x: 0, y: 1 }, { x: 4, y: 1 }));
+    expect(parallel.walls).toHaveLength(2);
+    expect(() => addWall(project, createWall('overlap', { x: 2, y: 0 }, { x: 5, y: 0 }))).toThrow(/cannot overlap/);
+    const twoHosts = { ...project, walls: [host, createWall('host-2', { x: 0, y: 2 }, { x: 4, y: 2 })] };
+    expect(() => addWall(twoHosts, createWall('through-both', { x: 2, y: -1 }, { x: 2, y: 3 }))).toThrow(/multiple wall crossings/);
+    expect(twoHosts.walls).toHaveLength(2);
+    expect(project.walls).toEqual([host]);
+  });
+
+  it('reassigns openings on one side of an X crossing and atomically rejects a crossing through an opening', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const project = { ...base, walls: [host], rooms: [] };
+    const withWindow = updateWallOpening(addWallOpening(project, 'host', 'window'), 'opening-1', { center: 3.2, width: 0.5 });
+    const added = addWall(withWindow, createWall('crossing', { x: 2, y: -2 }, { x: 2, y: 2 }));
+    expect(added.wallOpenings[0]).toMatchObject({ wallId: 'wall-1', width: 0.5 });
+    expect(added.wallOpenings[0].center).toBeCloseTo(1.2);
+
+    const throughOpening = addWallOpening(project, 'host', 'window');
+    expect(() => addWall(throughOpening, createWall('crossing', { x: 2, y: -2 }, { x: 2, y: 2 }))).toThrow(/cannot split a wall through an opening/);
+    expect(throughOpening.walls).toEqual([host]);
+    expect(throughOpening.wallOpenings[0].wallId).toBe('host');
+  });
+
   it('rejects a newly drawn wall endpoint that would split a hosted opening in two', () => {
     const base = createStarterProject();
     const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
