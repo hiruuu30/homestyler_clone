@@ -1,6 +1,6 @@
 # Independent room-planner prototype and Homestyler research
 
-**Status:** code commit `a151e24` is pushed to `hiruuu30/homestyler_clone` main. Production at [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/) returns HTTP 200 and serves `index-FtivB5-_.js`, byte-identical to the fresh local build (SHA-256 `8e7ded3028b31d9b110f7a14d72230b8ccea432b007fee1bb849b70cfc501122`). The bundle contains the generic wall-hosted door/window controls. This remains the incomplete prototype explicitly authorized for release, not a complete-clone or parity claim. Original Homestyler catalog assets remain deferred.
+**Status:** code commit `e652684` is pushed to `hiruuu30/homestyler_clone` main. Vercel deployment `dpl_9PrKEcxi6ec1rrH1pzCoBwZsd2RR` is READY for production. [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/) returns HTTP 200 and serves `index-DPgQG0Qj.js`, byte-identical to the local build (SHA-256 `f38714593c84430408d0585117e7eda4efa5b18ce0f893403ee19c136ae768cc`). The bundle contains the SVG/CSV export controls and the generic wall-hosted door/window controls. This remains the incomplete prototype explicitly authorized for release, not a complete-clone or parity claim. Original Homestyler catalog assets remain deferred.
 
 ## Current milestone
 
