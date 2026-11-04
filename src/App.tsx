@@ -8,7 +8,7 @@ import {
   addFurniture, arrayFurniture, assignRoomMaterial, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removeWall, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture,
-  updateWallHeight, updateWallThickness,
+  updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
 import { PlanCanvas } from './components/PlanCanvas';
@@ -398,6 +398,10 @@ export default function App() {
             <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} m²</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
             <section className="wall-settings-section"><h3>Wall settings</h3><div className="wall-fields">
               <label>Size<div className="unit-input"><input readOnly value={distance(selectedWall.start, selectedWall.end).toFixed(2)} /><span>{project.units}</span></div></label>
+              <NumericField label="Start X" value={selectedWall.start.x} unit="m" step={0.05} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { start: { ...selectedWall.start, x: value } }))} />
+              <NumericField label="Start Y" value={selectedWall.start.y} unit="m" step={0.05} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { start: { ...selectedWall.start, y: value } }))} />
+              <NumericField label="End X" value={selectedWall.end.x} unit="m" step={0.05} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { end: { ...selectedWall.end, x: value } }))} />
+              <NumericField label="End Y" value={selectedWall.end.y} unit="m" step={0.05} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { end: { ...selectedWall.end, y: value } }))} />
               <NumericField label="Wall height" value={selectedWall.height} unit={project.units} min={0.1} step={0.05} onCommit={(value) => commit(updateWallHeight(project, selectedWall.id, value))} />
               <NumericField label="Thickness" value={selectedWall.thickness} unit={project.units} min={0.05} step={0.01} onCommit={(value) => commit(updateWallThickness(project, selectedWall.id, value))} />
               <button className="rotate-btn" onClick={splitSelectedWall}><Scissors size={14} /> Split wall at midpoint</button>

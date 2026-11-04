@@ -18,6 +18,7 @@ import {
   setFurnitureHidden,
   splitWall,
   updateFurniture,
+  updateWallEndpoints,
   updateWallHeight,
   updateWallThickness,
 } from './model';
@@ -76,6 +77,30 @@ describe('domain model', () => {
     expect(updated.thickness).toBe(0.2);
     expect(wall.thickness).toBe(0.12);
     expect(Object.isFrozen(updated)).toBe(true);
+  });
+
+  it('updates wall endpoints immutably while preserving its other properties', () => {
+    const project = createStarterProject();
+    const original = project.walls.find((wall) => wall.id === 'wall-north')!;
+    const start = { x: original.start.x - 0.5, y: original.start.y + 0.2 };
+    const end = { x: original.end.x + 0.75, y: original.end.y + 0.2 };
+    const updated = updateWallEndpoints(project, original.id, { start, end });
+    const wall = updated.walls.find((item) => item.id === original.id)!;
+
+    expect(wall.start).toEqual(start);
+    expect(wall.end).toEqual(end);
+    expect(wall).toMatchObject({ thickness: original.thickness, height: original.height, materialId: original.materialId, levelId: original.levelId });
+    expect(project.walls.find((item) => item.id === original.id)).toEqual(original);
+    expect(Object.isFrozen(wall.start)).toBe(true);
+  });
+
+  it('rejects invalid or coincident wall endpoints and unknown wall IDs', () => {
+    const project = createStarterProject();
+    const wall = project.walls.find((item) => item.id === 'wall-north')!;
+
+    expect(() => updateWallEndpoints(project, wall.id, { start: { x: Number.NaN, y: 0 } })).toThrow(/finite numbers/);
+    expect(() => updateWallEndpoints(project, wall.id, { end: wall.start })).toThrow(/different points/);
+    expect(() => updateWallEndpoints(project, 'missing-wall', { end: { x: 1, y: 1 } })).toThrow(/unknown wall/);
   });
 
   it('assigns a room material without mutating the original room', () => {

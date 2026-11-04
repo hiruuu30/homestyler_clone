@@ -332,6 +332,20 @@ export function removeWall(project: DesignProject, wallId: string): DesignProjec
   return copyProject(project, { walls: project.walls.filter((wall) => wall.id !== wallId) });
 }
 
+export type WallEndpointChanges = Partial<Pick<Wall, 'start' | 'end'>>;
+
+export function updateWallEndpoints(project: DesignProject, wallId: string, changes: WallEndpointChanges): DesignProject {
+  id(wallId, 'wall id');
+  const wall = project.walls.find((item) => item.id === wallId);
+  if (!wall) throw new RangeError(`unknown wall: ${wallId}`);
+  const start = changes.start === undefined ? wall.start : point(changes.start, 'wall start');
+  const end = changes.end === undefined ? wall.end : point(changes.end, 'wall end');
+  if (start.x === end.x && start.y === end.y) throw new RangeError('wall endpoints must be different points');
+  return copyProject(project, {
+    walls: project.walls.map((item) => item.id === wallId ? freeze({ ...item, start, end }) : item),
+  });
+}
+
 export function setFurnitureHidden(project: DesignProject, furnitureId: string, hidden: boolean): DesignProject {
   id(furnitureId, 'furniture id');
   if (typeof hidden !== 'boolean') throw new TypeError('hidden must be a boolean');
