@@ -243,31 +243,52 @@ export default function App() {
         <button className="project-title" onClick={() => notify(project.name)}>{project.name}<ChevronDown size={13} /></button>
         <span className="cloud-state"><i /> Local project</span>
         <div className="top-spacer" />
-        <button className="top-btn" onClick={newDesign}><FilePlus2 size={16} /><span>New</span></button>
-        <button className="top-btn" onClick={save}><Save size={16} /><span>{saved ? 'Save' : 'Save*'}</span></button>
-        <button className="top-btn" onClick={undo} disabled={!undoStack.length}><Undo2 size={16} /><span>Undo</span></button>
-        <button className="top-btn" onClick={redo} disabled={!redoStack.length}><Redo2 size={16} /><span>Redo</span></button>
-        <button className="top-btn" onClick={exportProject}><Download size={16} /><span>Export</span></button>
-        <button className="icon-btn" title="Help" onClick={() => notify('Starter editor: draw rooms, add walls, furniture and finishes')}><CircleHelp size={17} /></button>
-        <span className="avatar">H</span>
+        <div className="top-actions">
+          <button className="top-btn" title="Save project" aria-label="Save project" onClick={save}><Save size={20} /><span>{saved ? 'Save' : 'Save*'}</span></button>
+          <button className="top-btn" title="Undo" aria-label="Undo" onClick={undo} disabled={!undoStack.length}><Undo2 size={20} /><span>Undo</span></button>
+          <button className="top-btn" title="Redo" aria-label="Redo" onClick={redo} disabled={!redoStack.length}><Redo2 size={20} /><span>Redo</span></button>
+          <span className="avatar" aria-label="RoomLab account">H</span>
+          <button className="icon-btn" title="Help" aria-label="Help" onClick={() => notify('Starter editor: draw rooms, add walls, furniture and finishes')}><CircleHelp size={20} /></button>
+        </div>
       </header>
       <div className="workspace" id="workspace">
         <nav className="rail" aria-label="Editor tools">
-          <Rail icon={<Building2 size={19} />} label="Build" active={panel === 'build'} onClick={() => setPanel('build')} />
-          <Rail icon={<Sofa size={19} />} label="Furniture" active={panel === 'furniture'} onClick={() => setPanel('furniture')} />
-          <Rail icon={<PaintBucket size={19} />} label="Finish" active={panel === 'finish'} onClick={() => setPanel('finish')} />
-          <Rail icon={<Layers3 size={19} />} label="Project" active={panel === 'project'} onClick={() => setPanel('project')} />
+          <Rail icon={<Building2 size={28} />} label="Build" active={panel === 'build'} onClick={() => setPanel('build')} />
+          <div className="rail-divider" />
+          <Rail icon={<Sofa size={28} />} label="Decorate" active={panel === 'furniture' || panel === 'finish'} onClick={() => setPanel('furniture')} />
+          <div className="rail-divider" />
+          <Rail icon={<PaintBucket size={28} />} label="AI Decor" active={false} disabled title="AI decorating is not implemented" onClick={() => {}} />
+          <div className="rail-divider" />
+          <Rail icon={<Grid2X2 size={28} />} label="Templates" active={false} disabled title="Template catalog is not implemented" onClick={() => {}} />
+          <div className="rail-divider" />
+          <Rail icon={<Layers3 size={28} />} label="My" active={panel === 'project'} onClick={() => setPanel('project')} />
         </nav>
         {!collapsed && <aside className="tool-panel">
-          <div className="panel-heading"><div><small>EDITOR</small><h1>{panelTitle}</h1></div><button className="icon-btn" title="Collapse panel" onClick={() => setCollapsed(true)}><PanelLeftClose size={16} /></button></div>
-          {panel === 'build' && <div className="panel-scroll">
-            <div className="section-label">PLAN TOOLS</div>
-            <div className="tool-grid">
-              <Tool icon={<MousePointer2 size={18} />} label="Select" active={tool === 'select'} onClick={() => setTool('select')} />
-              <Tool icon={<Square size={18} />} label="Room" active={tool === 'room'} onClick={() => { setView('plan'); setTool('room'); }} />
-              <Tool icon={<Grid2X2 size={18} />} label="Wall" active={tool === 'wall'} onClick={() => { setView('plan'); setTool('wall'); }} />
+          <div className={`panel-heading${panel === 'build' ? ' build-heading' : ''}`}><div>{panel === 'build' ? <span className="build-heading-title">Create room</span> : <><small>EDITOR</small><h1>{panelTitle}</h1></>}</div><button className="icon-btn" title="Collapse panel" onClick={() => setCollapsed(true)}><PanelLeftClose size={16} /></button></div>
+          {panel === 'build' && <div className="panel-scroll build-panel-scroll"><div className="build-panel-content">
+            <div className="build-template-grid">
+              <button className="build-template-card" disabled title="Room templates are not implemented"><div className="build-card-eyebrow">Select</div><div className="build-card-title">Templates</div><span className="build-card-art"><Building2 size={27} /></span></button>
+              <button className="build-template-card" disabled title="Floor plan image import is not implemented"><div className="build-card-eyebrow">Import</div><div className="build-card-title">Floor plan</div><span className="build-card-art"><Upload size={25} /></span><span className="build-new-badge">New</span></button>
             </div>
-            <div className="tip"><b>Draw geometry</b><p>Select Room or Wall, then drag on the 2D plan. Select a wall to edit its thickness.</p></div>
+            <button className="build-new-plan" onClick={() => { setView('plan'); setTool('room'); }}><Plus size={15} />Add a room to the plan</button>
+            <span className="section-label build-section build-section-first">Draw walls</span>
+            <div className="build-reference-grid build-wall-tools">
+              <button className={`build-reference-tool${tool === 'wall' ? ' active' : ''}`} onClick={() => { setView('plan'); setTool('wall'); }}><span><Grid2X2 size={27} /></span><div>Draw straight walls</div></button>
+              <button className={`build-reference-tool${tool === 'room' ? ' active' : ''}`} onClick={() => { setView('plan'); setTool('room'); }}><span><Square size={27} /></span><div>Draw rooms</div></button>
+              <button className="build-reference-tool" disabled title="Outside area is not implemented"><span><Maximize2 size={27} /></span><span className="build-reference-label">Outside area</span></button>
+            </div>
+            <span className="section-label build-section">Door and window</span>
+            <div className="build-reference-grid build-muted-grid build-door-tools">
+              <button className="build-reference-tool" disabled><span><Square size={27} /></span><div>Single door</div></button>
+              <button className="build-reference-tool" disabled><span><Square size={27} /></span><div>Window</div></button>
+              <button className="build-reference-tool" disabled><span><Square size={27} /></span><div>Corner bay window</div></button>
+            </div>
+            <span className="section-label build-section">Structure</span>
+            <div className="build-reference-grid build-muted-grid build-structure-tools">
+              <button className="build-reference-tool" disabled><span><Building2 size={27} /></span><div>Auto add roof</div></button>
+              <button className="build-reference-tool" disabled><span><Layers3 size={27} /></span><div>Stair</div></button>
+              <button className="build-reference-tool" disabled><span><Square size={27} /></span><span className="build-reference-label">Door opening</span></button>
+            </div>
             <div className="section-label">FLOORS</div>
             <div className="level-list">{project.levels.map((level) => <div key={level.id} className={`level-row${level.id === activeLevelId ? ' active' : ''}`}>
               <button className="level-select" onClick={() => selectLevel(level.id)}><Layers3 size={14} /><span>{level.name}<small>Elevation {level.elevation.toFixed(2)} m</small></span></button>
@@ -277,14 +298,16 @@ export default function App() {
             <div className="section-label">ADVANCED TOOLS</div>
             <button className="locked-row" disabled><Plus size={16} /><span>Doors and windows</span><small>Not implemented</small></button>
             <p className="disclaimer">This is an early independent implementation; full feature and pixel parity have not been verified.</p>
-          </div>}
+          </div></div>}
           {panel === 'furniture' && <div className="panel-scroll">
+            <div className="panel-subnav"><button className="active" onClick={() => setPanel('furniture')}>Furniture</button><button onClick={() => setPanel('finish')}>Finish</button></div>
             <div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search starter assets" /></div>
             <div className="section-label">GENERIC STARTER ASSETS</div>
             <button className="asset-card" onClick={addSofa}><span className="asset-drawing"><Sofa size={44} /></span><b>Starter sofa</b><small>Procedural placeholder</small></button>
             <div className="tip"><b>Asset corpus missing</b><p>User stated permission for the Homestyler catalog; the source catalog is not supplied here. These starter assets are not equivalent.</p></div>
           </div>}
           {panel === 'finish' && <div className="panel-scroll">
+            <div className="panel-subnav"><button onClick={() => setPanel('furniture')}>Furniture</button><button className="active" onClick={() => setPanel('finish')}>Finish</button></div>
             <div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search starter finishes" /></div>
             <div className="section-label">STARTER MATERIALS</div>
             <div className="material-grid">{project.materials.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).map((material) => <button key={material.id} className="material-card" onClick={() => applyMaterial(material.id)}><span style={{ background: material.color }} /><b>{material.name}</b></button>)}</div>
@@ -292,6 +315,7 @@ export default function App() {
           </div>}
           {panel === 'project' && <div className="panel-scroll">
             <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects</p><p>{area.toFixed(2)} m² on {activeLevel.name}</p></div>
+            <button className="action-row" onClick={newDesign}><FilePlus2 size={16} />New design</button>
             <button className="action-row" onClick={() => importRef.current?.click()}><Upload size={16} />Import RoomLab JSON</button>
             <button className="action-row" onClick={exportProject}><Download size={16} />Export RoomLab JSON</button>
             <div className="tip"><b>Local persistence only</b><p>Save stores data in this browser. Cloud accounts, sharing and project history are not implemented.</p></div>
@@ -315,12 +339,28 @@ export default function App() {
             <button className="icon-btn" title="Fit view" onClick={() => notify('View fitted to current project')}><Maximize2 size={16} /></button>
           </footer>
         </main>
-        <aside className="inspector">
-          <div className="map-card"><MapPreview project={visibleProject} onToggle={() => setView(view === 'plan' ? '3d' : 'plan')} /></div>
-          <div className="inspector-head"><small>PROPERTIES</small><h2>{selectedRoom?.name ?? (selectedWall ? 'Wall' : selectedFurniture?.name ?? 'Design summary')}</h2></div>
+        <aside className={`inspector${selectedWall ? ' wall-state' : ''}`}>
+          <div className="map-card"><MapPreview
+            project={visibleProject}
+            view={view}
+            onSet3d={() => { setView('3d'); setTool('select'); }}
+            onSet2d={() => { setView('plan'); setTool('select'); }}
+            onSelectRoom={(roomId) => {
+              if (visibleProject.rooms.some((room) => room.id === roomId)) setSelectedId(roomId);
+            }}
+          /></div>
+          <div className={`inspector-head${selectedWall ? ' wall-selected' : ''}`}>{!selectedWall && <small>PROPERTIES</small>}<h2>{selectedWall ? 'Layer settings' : selectedRoom?.name ?? (selectedFurniture?.name ?? 'Design summary')}</h2></div>
           {!selectedRoom && !selectedWall && !selectedFurniture && <div className="summary"><Building2 size={27} /><p>{activeLevel.name} · select a room, wall, or furniture object.</p><div><span>Rooms</span><b>{visibleProject.rooms.length}</b></div><div><span>Floor area</span><b>{area.toFixed(2)} m²</b></div><div><span>Furniture</span><b>{visibleProject.furniture.length}</b></div></div>}
           {selectedRoom && <div className="properties"><section><h3>Room settings</h3><label>Room name<input value={selectedRoom.name} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, name: event.target.value } : room) })} /></label><label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} m²`} /></label><label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label></section><section><h3>Room options</h3><label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label></section></div>}
-          {selectedWall && <div className="properties"><section><h3>Wall parameters</h3><NumericField label="Thickness" value={selectedWall.thickness} unit="m" min={0.05} step={0.01} onCommit={(value) => commit(updateWallThickness(project, selectedWall.id, value))} /><NumericField label="Height" value={selectedWall.height} unit="m" min={0.1} step={0.05} onCommit={(value) => commit(updateWallHeight(project, selectedWall.id, value))} /><label>Length<div className="unit-input"><input readOnly value={distance(selectedWall.start, selectedWall.end).toFixed(2)} /><span>m</span></div></label><button className="rotate-btn danger-action" onClick={deleteSelected}><Trash2 size={14} /> Delete wall</button></section></div>}
+          {selectedWall && <div className="properties wall-properties">
+            <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} m²</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
+            <section className="wall-settings-section"><h3>Wall settings</h3><div className="wall-fields">
+              <label>Size<div className="unit-input"><input readOnly value={distance(selectedWall.start, selectedWall.end).toFixed(2)} /><span>{project.units}</span></div></label>
+              <NumericField label="Wall height" value={selectedWall.height} unit={project.units} min={0.1} step={0.05} onCommit={(value) => commit(updateWallHeight(project, selectedWall.id, value))} />
+              <NumericField label="Thickness" value={selectedWall.thickness} unit={project.units} min={0.05} step={0.01} onCommit={(value) => commit(updateWallThickness(project, selectedWall.id, value))} />
+              <button className="rotate-btn danger-action wall-delete" onClick={deleteSelected}><Trash2 size={14} /> Delete wall</button>
+            </div></section>
+          </div>}
           {selectedFurniture && <div className="properties"><section><h3>Object transform</h3>
             <NumericField label="Position X" value={selectedFurniture.position.x} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, x: value } }))} />
             <NumericField label="Position Y" value={selectedFurniture.position.y} unit="m" step={0.05} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, y: value } }))} />
@@ -341,11 +381,8 @@ export default function App() {
   );
 }
 
-function Rail({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
-  return <button className={`rail-item ${active ? 'active' : ''}`} onClick={onClick}><span>{icon}</span><small>{label}</small></button>;
-}
-function Tool({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
-  return <button className={`tool-button ${active ? 'active' : ''}`} onClick={onClick}><span>{icon}</span><small>{label}</small></button>;
+function Rail({ icon, label, active, onClick, disabled = false, title }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; disabled?: boolean; title?: string }) {
+  return <button className={`rail-item ${active ? 'active' : ''}`} onClick={onClick} disabled={disabled} title={title} aria-label={label}><span>{icon}</span><small>{label}</small></button>;
 }
 
 function previewBounds(project: DesignProject) {
@@ -369,7 +406,8 @@ function previewBounds(project: DesignProject) {
   return { minX: centerX - width / 2, minY: centerY - height / 2 - 0.19, width, height };
 }
 
-function MapPreview({ project, onToggle }: { project: DesignProject; onToggle: () => void }) {
+function MapPreview({ project, view, onSet3d, onSet2d, onSelectRoom }: { project: DesignProject; view: ViewMode; onSet3d: () => void; onSet2d: () => void; onSelectRoom: (roomId: string) => void }) {
+  const [openMenu, setOpenMenu] = useState<'view' | 'room' | null>(null);
   const bounds = previewBounds(project);
   const viewBox = `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`;
   const fontSize = Math.min(bounds.width, bounds.height) * 0.0875;
@@ -378,7 +416,7 @@ function MapPreview({ project, onToggle }: { project: DesignProject; onToggle: (
     (result, point) => ({ x: result.x + point.x / points.length, y: result.y + point.y / points.length }),
     { x: 0, y: 0 },
   );
-  return <button className="mini-map" type="button" aria-label="Switch between 2D and 3D view" onClick={onToggle}>
+  return <div className="mini-map" role="group" aria-label="Floor plan overview">
     <svg className="map-preview" viewBox={viewBox} aria-hidden="true" preserveAspectRatio="xMidYMid meet">
       <rect className="map-background" x={bounds.minX} y={bounds.minY} width={bounds.width} height={bounds.height} />
       {project.rooms.map((room) => <polygon key={room.id} className="map-room" points={pointsAttribute(room.points)} />)}
@@ -391,7 +429,19 @@ function MapPreview({ project, onToggle }: { project: DesignProject; onToggle: (
         return <text key={`${room.id}-label`} className="map-room-label" x={label.x} y={label.y} textAnchor="middle" dominantBaseline="central" fontSize={fontSize} textLength={referenceWidth} lengthAdjust={referenceWidth ? 'spacingAndGlyphs' : undefined}>{room.name}</text>;
       })}
     </svg>
-  </button>;
+    <div className="mini-map-controls">
+      <button className="mini-map-control mini-map-view" title="Choose view" aria-haspopup="menu" aria-expanded={openMenu === 'view'} onClick={() => setOpenMenu(openMenu === 'view' ? null : 'view')}><div>{view === '3d' ? '3D View' : '2D Plan'}</div><ChevronDown size={11} /></button>
+      <button className="mini-map-control mini-map-select" title="Select room" aria-haspopup="menu" aria-expanded={openMenu === 'room'} onClick={() => setOpenMenu(openMenu === 'room' ? null : 'room')}><div>Select room</div><ChevronDown size={11} /></button>
+      {openMenu === 'view' && <div className="mini-map-menu mini-map-view-menu" role="menu" aria-label="Choose view">
+        <button role="menuitem" className={view === 'plan' ? 'selected' : ''} onClick={() => { onSet2d(); setOpenMenu(null); }}>2D Plan</button>
+        <button role="menuitem" className={view === '3d' ? 'selected' : ''} onClick={() => { onSet3d(); setOpenMenu(null); }}>3D View</button>
+      </div>}
+      {openMenu === 'room' && <div className="mini-map-menu mini-map-room-menu" role="menu" aria-label="Select room">
+        {project.rooms.map((room) => <button key={room.id} role="menuitem" onClick={() => { onSelectRoom(room.id); setOpenMenu(null); }}>{room.name}</button>)}
+      </div>}
+    </div>
+    <button className="mini-map-switch" title={view === '3d' ? 'Switch to 2D' : 'Switch to 3D'} onClick={view === '3d' ? onSet2d : onSet3d}><div>{view === '3d' ? 'Switch to 2D' : 'Switch to 3D'}</div><ChevronRight size={11} /></button>
+  </div>;
 }
 
 function NumericField({ label, value, unit, min, step, onCommit }: {
