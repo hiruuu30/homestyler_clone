@@ -233,6 +233,29 @@ describe('domain model', () => {
     expect(Object.isFrozen(wall.start)).toBe(true);
   });
 
+  it('moves a shared endpoint across same-floor walls and room outlines but not another floor', () => {
+    const project = createStarterProject();
+    const upper = addLevel(project, 'Upper Floor');
+    const upperWall = createWall('upper-wall', { x: 6.2, y: -0.5 }, { x: 7, y: -0.5 }, undefined, undefined, undefined, upper.activeLevelId);
+    const withUpperWall = { ...upper, walls: [...upper.walls, upperWall] };
+    const moved = updateWallEndpoints(withUpperWall, 'wall-north', { end: { x: 6.75, y: -0.5 } });
+
+    expect(moved.walls.find((wall) => wall.id === 'wall-north')?.end).toEqual({ x: 6.75, y: -0.5 });
+    expect(moved.walls.find((wall) => wall.id === 'wall-east')?.start).toEqual({ x: 6.75, y: -0.5 });
+    expect(moved.rooms.find((room) => room.id === 'room-starter')?.points).toContainEqual({ x: 6.75, y: -0.5 });
+    expect(moved.walls.find((wall) => wall.id === 'upper-wall')?.start).toEqual(upperWall.start);
+    expect(project.walls.find((wall) => wall.id === 'wall-east')?.start).toEqual({ x: 6.2, y: -0.5 });
+    expect(project.rooms.find((room) => room.id === 'room-starter')?.points).toContainEqual({ x: 6.2, y: -0.5 });
+  });
+
+  it('rejects a connected-node edit that collapses a room edge or invalidates a hosted opening', () => {
+    const project = createStarterProject();
+    expect(() => updateWallEndpoints(project, 'wall-north', { end: { x: 4.2, y: 2.1 } })).toThrow(/self-intersect|non-zero length/);
+    const withDoor = addWallOpening(project, 'wall-north', 'door');
+    expect(() => updateWallEndpoints(withDoor, 'wall-north', { start: { x: 5.9, y: -0.5 } })).toThrow(/opening must fit/);
+    expect(project.walls.find((wall) => wall.id === 'wall-north')?.start).toEqual({ x: 4.2, y: -0.5 });
+  });
+
   it('rejects invalid or coincident wall endpoints and unknown wall IDs', () => {
     const project = createStarterProject();
     const wall = project.walls.find((item) => item.id === 'wall-north')!;

@@ -346,6 +346,15 @@ export default function App() {
     commit(removePlanUnderlay(project, id));
     notify('Plan image removed · Undo to restore');
   }
+  function editWallEndpoints(id: string, changes: { start?: Point; end?: Point }): boolean {
+    try {
+      commit(updateWallEndpoints(project, id, changes));
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not update the connected wall geometry');
+      return false;
+    }
+  }
   function changeUnits(units: 'm' | 'ft') {
     if (units === project.units) return;
     commit(convertProjectUnits(project, units));
@@ -564,10 +573,10 @@ export default function App() {
             <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} {areaUnit}</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
             <section className="wall-settings-section"><h3>Wall settings</h3><div className="wall-fields">
               <label>Size<div className="unit-input"><input readOnly value={distance(selectedWall.start, selectedWall.end).toFixed(2)} /><span>{project.units}</span></div></label>
-              <NumericField label="Start X" value={selectedWall.start.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { start: { ...selectedWall.start, x: value } }))} />
-              <NumericField label="Start Y" value={selectedWall.start.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { start: { ...selectedWall.start, y: value } }))} />
-              <NumericField label="End X" value={selectedWall.end.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { end: { ...selectedWall.end, x: value } }))} />
-              <NumericField label="End Y" value={selectedWall.end.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallEndpoints(project, selectedWall.id, { end: { ...selectedWall.end, y: value } }))} />
+              <NumericField label="Start X" value={selectedWall.start.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editWallEndpoints(selectedWall.id, { start: { ...selectedWall.start, x: value } })} />
+              <NumericField label="Start Y" value={selectedWall.start.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editWallEndpoints(selectedWall.id, { start: { ...selectedWall.start, y: value } })} />
+              <NumericField label="End X" value={selectedWall.end.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editWallEndpoints(selectedWall.id, { end: { ...selectedWall.end, x: value } })} />
+              <NumericField label="End Y" value={selectedWall.end.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editWallEndpoints(selectedWall.id, { end: { ...selectedWall.end, y: value } })} />
               <NumericField label="Wall height" value={selectedWall.height} unit={lengthUnit} min={0.1 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallHeight(project, selectedWall.id, value))} />
               <NumericField label="Thickness" value={selectedWall.thickness} unit={lengthUnit} min={0.05 * metresToProjectUnits} step={0.01 * metresToProjectUnits} onCommit={(value) => commit(updateWallThickness(project, selectedWall.id, value))} />
               <button className="rotate-btn" onClick={splitSelectedWall}><Scissors size={14} /> Split wall at midpoint</button>
@@ -685,7 +694,7 @@ function NumericField({ label, value, unit, min, step, onCommit }: {
   unit: string;
   min?: number;
   step: number;
-  onCommit: (value: number) => void;
+  onCommit: (value: number) => void | boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(String(value));
@@ -695,7 +704,7 @@ function NumericField({ label, value, unit, min, step, onCommit }: {
   const commitDraft = () => {
     const next = Number(draft);
     if (draft.trim() && Number.isFinite(next) && (min === undefined || next >= min)) {
-      if (!Object.is(next, value)) onCommit(next);
+      if (!Object.is(next, value) && onCommit(next) === false) setDraft(String(value));
     } else {
       setDraft(String(value));
     }

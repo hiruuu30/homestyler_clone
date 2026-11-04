@@ -625,11 +625,27 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
   const start = changes.start === undefined ? wall.start : point(changes.start, 'wall start');
   const end = changes.end === undefined ? wall.end : point(changes.end, 'wall end');
   if (start.x === end.x && start.y === end.y) throw new RangeError('wall endpoints must be different points');
-  const updatedWall = { ...wall, start, end };
-  project.wallOpenings.filter((opening) => opening.wallId === wallId).forEach((opening) => validateOpening(updatedWall, opening));
-  return copyProject(project, {
-    walls: project.walls.map((item) => item.id === wallId ? freeze(updatedWall) : item),
+  const nodeKey = (levelId: string, value: Point) => JSON.stringify([levelId, value.x || 0, value.y || 0]);
+  const movedNodes = new Map<string, Point>([
+    [nodeKey(wall.levelId, wall.start), start],
+    [nodeKey(wall.levelId, wall.end), end],
+  ]);
+  const walls = project.walls.map((item) => {
+    const nextStart = movedNodes.get(nodeKey(item.levelId, item.start)) ?? item.start;
+    const nextEnd = movedNodes.get(nodeKey(item.levelId, item.end)) ?? item.end;
+    if (nextStart.x === item.start.x && nextStart.y === item.start.y && nextEnd.x === item.end.x && nextEnd.y === item.end.y) return item;
+    if (nextStart.x === nextEnd.x && nextStart.y === nextEnd.y) throw new RangeError(`endpoint edit would collapse wall: ${item.id}`);
+    const updated = freeze({ ...item, start: point(nextStart, 'wall start'), end: point(nextEnd, 'wall end') });
+    project.wallOpenings.filter((opening) => opening.wallId === item.id).forEach((opening) => validateOpening(updated, opening));
+    return updated;
   });
+  const rooms = project.rooms.map((room) => {
+    const points = room.points.map((vertex) => movedNodes.get(nodeKey(room.levelId, vertex)) ?? vertex);
+    if (points.every((vertex, index) => vertex.x === room.points[index].x && vertex.y === room.points[index].y)) return room;
+    const validated = createPolygonRoom(room.id, room.name, points, room.floorMaterialId, room.levelId, project.units);
+    return freeze({ ...room, points: validated.points });
+  });
+  return copyProject(project, { walls, rooms });
 }
 
 export function setFurnitureHidden(project: DesignProject, furnitureId: string, hidden: boolean): DesignProject {
