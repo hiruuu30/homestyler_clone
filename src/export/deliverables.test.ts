@@ -1,6 +1,6 @@
 import { DOMParser } from '@xmldom/xmldom';
 import { describe, expect, it } from 'vitest';
-import { addFurniture, addLevel, addWallOpening, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateRoomFloorFinishMapping } from '../domain/model';
+import { addFurniture, addLevel, addWallOpening, assignWallMaterial, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateRoomFloorFinishMapping } from '../domain/model';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './deliverables';
 
 const chair = {
@@ -96,6 +96,18 @@ describe('independent project deliverables', () => {
     expect(room?.getAttribute('data-floor-offset-x-m')).toBe('0.6096');
     expect(room?.getAttribute('data-floor-offset-y-m')).toBe('-0.3048');
     expect(room?.getAttribute('data-floor-scale-y')).toBe('0.75');
+  });
+
+  it('exports assigned wall material identity and resolved color', () => {
+    const project = assignWallMaterial(createStarterProject(), 'wall-north', 'material-neutral-floor');
+    const svg = exportPlanSvg(project);
+    const document = new DOMParser().parseFromString(svg, 'image/svg+xml');
+    const walls = Array.from(document.getElementsByTagNameNS('http://www.w3.org/2000/svg', 'line'));
+    const wall = walls.find((element) => element.getAttribute('id') === 'wall-north');
+
+    expect(wall?.getAttribute('data-material-id')).toBe('material-neutral-floor');
+    expect(wall?.getAttribute('stroke')).toBe('#d9c7aa');
+    expect(walls.find((element) => element.getAttribute('id') === 'wall-east')?.getAttribute('stroke')).toBe('#f4f1eb');
   });
 
   it('exports all levels and quantities as escaped, parseable CSV with consistent 19-column metric rows', () => {

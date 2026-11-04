@@ -297,16 +297,30 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
         />
       ))}
       {project.walls.map((wall) => (
-        <line
-          key={wall.id}
-          className={`plan-wall${selectedId === wall.id ? ' is-selected' : ''}`}
-          x1={wall.start.x}
-          y1={wall.start.y}
-          x2={wall.end.x}
-          y2={wall.end.y}
-          strokeWidth={wall.thickness}
-          onPointerDown={(event) => { if (polygonTool || tool === 'wall') return; event.stopPropagation(); onSelect(wall.id); }}
-        />
+        <g key={wall.id}>
+          <line
+            className={`plan-wall${selectedId === wall.id ? ' is-selected' : ''}`}
+            data-wall-id={wall.id}
+            x1={wall.start.x}
+            y1={wall.start.y}
+            x2={wall.end.x}
+            y2={wall.end.y}
+            strokeWidth={wall.thickness}
+            onPointerDown={(event) => { if (polygonTool || tool === 'wall') return; event.stopPropagation(); onSelect(wall.id); }}
+          />
+          <line
+            data-wall-id={wall.id}
+            data-wall-material-id={wall.materialId}
+            x1={wall.start.x}
+            y1={wall.start.y}
+            x2={wall.end.x}
+            y2={wall.end.y}
+            stroke={project.materials.find((material) => material.id === wall.materialId)?.color ?? '#d2d0ca'}
+            strokeWidth={Math.max(wall.thickness * 0.68, 0.01)}
+            strokeLinecap="square"
+            pointerEvents="none"
+          />
+        </g>
       ))}
       {project.wallOpenings.map((opening) => {
         const wall = project.walls.find((item) => item.id === opening.wallId);

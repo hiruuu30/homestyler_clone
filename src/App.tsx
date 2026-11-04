@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import {
   addFurniture, addRoomHole, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
-  addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
+  addLevel as addProjectLevel, assignWallMaterial, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomFloorFinishMapping,
   findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
@@ -84,6 +84,7 @@ export default function App() {
   const selectedOpening = visibleProject.wallOpenings.find((item) => item.id === selectedId) ?? null;
   const area = useMemo(() => visibleProject.rooms.reduce((sum, room) => sum + roomArea(room), 0), [visibleProject.rooms]);
   const selectedMaterial = selectedRoom ? project.materials.find((item) => item.id === selectedRoom.floorMaterialId) : null;
+  const selectedWallMaterial = selectedWall ? project.materials.find((item) => item.id === selectedWall.materialId) : null;
   const selectedFloorFinish = selectedRoom ? floorFinishForRoom(selectedRoom) : null;
   const lengthUnit = project.units;
   const areaUnit = project.units === 'ft' ? 'ft²' : 'm²';
@@ -288,6 +289,11 @@ export default function App() {
     catch (error) { notify(error instanceof Error ? error.message : 'Could not update this opening'); }
   }
   function applyMaterial(materialId: string) {
+    if (selectedWall) {
+      try { commit(assignWallMaterial(project, selectedWall.id, materialId)); }
+      catch (error) { notify(error instanceof Error ? error.message : 'Could not assign this wall finish'); }
+      return;
+    }
     const room = selectedRoom ?? visibleProject.rooms[0];
     if (!room) { notify('Create a room first'); return; }
     commit(assignRoomMaterial(project, room.id, materialId));
@@ -591,8 +597,9 @@ export default function App() {
             <div className="panel-subnav"><button onClick={() => setPanel('furniture')}>Furniture</button><button className="active" onClick={() => setPanel('finish')}>Finish</button></div>
             <div className="search-box"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search starter finishes" /></div>
             <div className="section-label">STARTER MATERIALS</div>
+            <p className="finish-target">{selectedWall ? `Choose a swatch to finish ${selectedWall.id}.` : selectedRoom ? `Choose a swatch to finish ${selectedRoom.name}.` : 'Select a room or wall, then choose a finish.'}</p>
             <div className="material-grid">{project.materials.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).map((material) => <button key={material.id} className="material-card" onClick={() => applyMaterial(material.id)}><span style={{ background: material.color }} /><b>{material.name}</b></button>)}</div>
-            <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
+            <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Wall assignments color the complete wall object; per-side finishes, texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
           </div>}
           {panel === 'project' && <div className="panel-scroll">
             <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects · {project.wallOpenings.length} openings</p><p>{area.toFixed(2)} {areaUnit} on {activeLevel.name}</p></div>
@@ -665,6 +672,8 @@ export default function App() {
             <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} {areaUnit}</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
             <section className="wall-settings-section"><h3>Wall settings</h3><div className="wall-fields">
               <label>Size<div className="unit-input"><input readOnly value={distance(selectedWall.start, selectedWall.end).toFixed(2)} /><span>{project.units}</span></div></label>
+              <label>Wall finish<div className="current-material"><span style={{ background: selectedWallMaterial?.color ?? '#d2d0ca' }} />{selectedWallMaterial?.name ?? 'Default'}</div></label>
+              <button className="rotate-btn" onClick={() => setPanel('finish')}>Choose wall finish in Finishes</button>
               <NumericField label="Start X" value={selectedWall.start.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editWallEndpoints(selectedWall.id, { start: { ...selectedWall.start, x: value } })} />
               <NumericField label="Start Y" value={selectedWall.start.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editWallEndpoints(selectedWall.id, { start: { ...selectedWall.start, y: value } })} />
               <NumericField label="End X" value={selectedWall.end.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editWallEndpoints(selectedWall.id, { end: { ...selectedWall.end, x: value } })} />

@@ -941,6 +941,17 @@ export function assignRoomMaterial(
   return freeze({ ...subject, floorMaterialId: materialId });
 }
 
+/** Assign one known project material to the complete wall object. */
+export function assignWallMaterial(project: DesignProject, wallId: string, materialId: string): DesignProject {
+  const targetWallId = id(wallId, 'wall id');
+  const targetMaterialId = id(materialId, 'material id');
+  if (!project.walls.some((wall) => wall.id === targetWallId)) throw new RangeError(`unknown wall: ${targetWallId}`);
+  if (!project.materials.some((material) => material.id === targetMaterialId)) throw new RangeError(`unknown material: ${targetMaterialId}`);
+  return copyProject(project, {
+    walls: project.walls.map((wall) => wall.id === targetWallId ? freeze({ ...wall, materialId: targetMaterialId }) : wall),
+  });
+}
+
 export function addFurniture(project: DesignProject, furniture: FurnitureInput): DesignProject {
   id(furniture.assetId, 'assetId');
   id(furniture.name, 'furniture name');

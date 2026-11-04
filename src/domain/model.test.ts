@@ -6,6 +6,7 @@ import {
   addWallOpening,
   arrayFurniture,
   assignRoomMaterial,
+  assignWallMaterial,
   createPlanUnderlay,
   createRectRoom,
   createPolygonRoom,
@@ -561,6 +562,29 @@ describe('domain model', () => {
     const updated = assignRoomMaterial(room, 'tile-blue');
     expect(updated.floorMaterialId).toBe('tile-blue');
     expect(room.floorMaterialId).toBe('material-neutral-floor');
+  });
+
+  it('assigns a known material to only the selected wall without mutating the project', () => {
+    const project = createStarterProject();
+    const updated = assignWallMaterial(project, 'wall-north', 'material-neutral-floor');
+
+    expect(updated.walls.find((wall) => wall.id === 'wall-north')?.materialId).toBe('material-neutral-floor');
+    expect(updated.walls.find((wall) => wall.id === 'wall-east')?.materialId).toBe('material-neutral-wall');
+    expect(project.walls.find((wall) => wall.id === 'wall-north')?.materialId).toBe('material-neutral-wall');
+    expect(updated.rooms).toEqual(project.rooms);
+    expect(updated.furniture).toEqual(project.furniture);
+    expect(normalizeProject(JSON.parse(JSON.stringify(updated))).walls.find((wall) => wall.id === 'wall-north')?.materialId).toBe('material-neutral-floor');
+    const splitSegments = splitWall(updated, 'wall-north').walls.filter((wall) => wall.start.y === -0.5 && wall.end.y === -0.5 && wall.start.x >= 4.2 && wall.end.x <= 6.2);
+    expect(splitSegments).toHaveLength(2);
+    expect(splitSegments.map((wall) => wall.materialId)).toEqual(['material-neutral-floor', 'material-neutral-floor']);
+  });
+
+  it('rejects blank, unknown-wall, and unknown-material wall assignments atomically', () => {
+    const project = createStarterProject();
+    expect(() => assignWallMaterial(project, '', 'material-neutral-floor')).toThrow(/wall id/);
+    expect(() => assignWallMaterial(project, 'missing-wall', 'material-neutral-floor')).toThrow(/unknown wall/);
+    expect(() => assignWallMaterial(project, 'wall-north', 'missing-material')).toThrow(/unknown material/);
+    expect(project.walls.find((wall) => wall.id === 'wall-north')?.materialId).toBe('material-neutral-wall');
   });
 
   it('places and incrementally rotates furniture in a project', () => {

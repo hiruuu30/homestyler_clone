@@ -204,7 +204,7 @@ export function exportPlanSvg(project: DesignProject, levelId = project.activeLe
   }
   parts.push('</g>', '<g class="walls" fill="none" stroke="#50565e" stroke-linecap="square" stroke-linejoin="round">');
   for (const wall of walls) {
-    parts.push(`<line id="${xml(wall.id)}" data-kind="wall" data-length-m="${number(wallLength(wall))}" x1="${number(wall.start.x)}" y1="${number(wall.start.y)}" x2="${number(wall.end.x)}" y2="${number(wall.end.y)}" stroke-width="${number(wall.thickness)}"/>`);
+    parts.push(`<line id="${xml(wall.id)}" data-kind="wall" data-length-m="${number(wallLength(wall))}" data-material-id="${xml(wall.materialId)}" stroke="${xml(materialColor(project, wall.materialId, '#50565e'))}" x1="${number(wall.start.x)}" y1="${number(wall.start.y)}" x2="${number(wall.end.x)}" y2="${number(wall.end.y)}" stroke-width="${number(wall.thickness)}"/>`);
   }
   parts.push('</g>', '<g class="openings" fill="none" stroke="#3c758c" stroke-linecap="round" stroke-linejoin="round" stroke-width="0.035">');
   for (const opening of openings) {
