@@ -369,12 +369,18 @@ export function createStarterProject(
     copyMaterial({ id: DEFAULT_MATERIAL_ID, name: 'Warm Neutral Floor', category: 'floor', color: '#d9c7aa' }),
     copyMaterial({ id: 'material-neutral-wall', name: 'Soft White Wall', category: 'wall', color: '#f4f1eb' }),
   ];
-  const room = createRectRoom('room-starter', 'Starter Room', 4, 3, { x: 0, y: 0 }, DEFAULT_MATERIAL_ID, level.id);
+  const rooms = [
+    createRectRoom('room-starter', 'Lobby', 2, 2.6, { x: 4.2, y: -0.5 }, DEFAULT_MATERIAL_ID, level.id),
+    createRectRoom('room-living', 'Living Room', 2, 2.6, { x: 2.2, y: 0.8 }, DEFAULT_MATERIAL_ID, level.id),
+  ];
   const walls = [
-    createWall('wall-north', { x: 0, y: 3 }, { x: 4, y: 3 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-east', { x: 4, y: 3 }, { x: 4, y: 0 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-south', { x: 4, y: 0 }, { x: 0, y: 0 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
-    createWall('wall-west', { x: 0, y: 0 }, { x: 0, y: 3 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
+    createWall('wall-north', { x: 4.2, y: -0.5 }, { x: 6.2, y: -0.5 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
+    createWall('wall-east', { x: 6.2, y: -0.5 }, { x: 6.2, y: 2.1 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
+    createWall('wall-south', { x: 6.2, y: 2.1 }, { x: 4.2, y: 2.1 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
+    createWall('wall-partition', { x: 4.2, y: 3.4 }, { x: 4.2, y: -0.5 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
+    createWall('wall-living-south', { x: 4.2, y: 3.4 }, { x: 2.2, y: 3.4 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
+    createWall('wall-living-west', { x: 2.2, y: 3.4 }, { x: 2.2, y: 0.8 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
+    createWall('wall-living-north', { x: 2.2, y: 0.8 }, { x: 4.2, y: 0.8 }, DEFAULT_WALL_THICKNESS, DEFAULT_WALL_HEIGHT, 'material-neutral-wall', level.id),
   ];
   return freeze({
     id: projectId,
@@ -382,7 +388,7 @@ export function createStarterProject(
     units,
     levels: freeze([level]),
     activeLevelId: level.id,
-    rooms: freeze([room]),
+    rooms: freeze(rooms),
     walls: freeze(walls),
     furniture: freeze([]),
     materials: freeze(materials),

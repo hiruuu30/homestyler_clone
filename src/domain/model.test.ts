@@ -53,6 +53,15 @@ describe('domain model', () => {
     expect(roomArea(createRectRoom('room-1', 'Room', 4, 3))).toBe(12);
   });
 
+  it('seeds a two-room comparison plan with generic geometry and no catalog furniture', () => {
+    const project = createStarterProject();
+
+    expect(project.rooms.map((room) => room.name)).toEqual(['Lobby', 'Living Room']);
+    expect(project.walls).toHaveLength(7);
+    expect(project.furniture).toEqual([]);
+    expect(project.rooms.reduce((sum, room) => sum + roomArea(room), 0)).toBeCloseTo(10.4);
+  });
+
   it('rejects a degenerate standalone wall', () => {
     expect(() => createWall('bad', { x: 1, y: 1 }, { x: 1, y: 1 })).toThrow(/different points/);
   });
@@ -134,7 +143,7 @@ describe('domain model', () => {
     expect(withoutWall.walls.some((wall) => wall.id === 'wall-north')).toBe(false);
     expect(withoutWall.rooms).toHaveLength(project.rooms.length);
     expect(project.furniture).toHaveLength(1);
-    expect(project.walls).toHaveLength(4);
+    expect(project.walls).toHaveLength(7);
   });
 
   it('adds a new level and makes it active at the next clear elevation', () => {

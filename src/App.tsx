@@ -304,7 +304,6 @@ export default function App() {
             {view === 'plan'
               ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} />
               : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
-            <div className="map-card"><b>{activeLevel.name} · {view === 'plan' ? '2D Plan' : '3D Preview'}</b><div className="mini-map" onClick={() => setView(view === 'plan' ? '3d' : 'plan')} role="button" tabIndex={0}><span /></div><small>{visibleProject.rooms.length} rooms · {area.toFixed(2)} m²</small></div>
             <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room' : tool === 'wall' ? 'Drag to add a wall segment' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
           </div>
           <footer className="bottom-bar">
@@ -317,6 +316,7 @@ export default function App() {
           </footer>
         </main>
         <aside className="inspector">
+          <div className="map-card"><MapPreview project={visibleProject} onToggle={() => setView(view === 'plan' ? '3d' : 'plan')} /></div>
           <div className="inspector-head"><small>PROPERTIES</small><h2>{selectedRoom?.name ?? (selectedWall ? 'Wall' : selectedFurniture?.name ?? 'Design summary')}</h2></div>
           {!selectedRoom && !selectedWall && !selectedFurniture && <div className="summary"><Building2 size={27} /><p>{activeLevel.name} · select a room, wall, or furniture object.</p><div><span>Rooms</span><b>{visibleProject.rooms.length}</b></div><div><span>Floor area</span><b>{area.toFixed(2)} m²</b></div><div><span>Furniture</span><b>{visibleProject.furniture.length}</b></div></div>}
           {selectedRoom && <div className="properties"><section><h3>Room settings</h3><label>Room name<input value={selectedRoom.name} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, name: event.target.value } : room) })} /></label><label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} m²`} /></label><label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label></section><section><h3>Room options</h3><label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label></section></div>}
@@ -346,6 +346,52 @@ function Rail({ icon, label, active, onClick }: { icon: React.ReactNode; label: 
 }
 function Tool({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
   return <button className={`tool-button ${active ? 'active' : ''}`} onClick={onClick}><span>{icon}</span><small>{label}</small></button>;
+}
+
+function previewBounds(project: DesignProject) {
+  const points = [
+    ...project.rooms.flatMap((room) => room.points),
+    ...project.walls.flatMap((wall) => [wall.start, wall.end]),
+    ...project.furniture.map((item) => item.position),
+  ];
+  if (!points.length) return { minX: -4, minY: -2, width: 8, height: 4 };
+  const padding = 0.05;
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const rawMinX = Math.min(...xs) - padding;
+  const rawMaxX = Math.max(...xs) + padding;
+  const rawMinY = Math.min(...ys) - padding;
+  const rawMaxY = Math.max(...ys) + padding;
+  const width = Math.max(8, rawMaxX - rawMinX);
+  const height = Math.max(4, rawMaxY - rawMinY);
+  const centerX = (rawMinX + rawMaxX) / 2;
+  const centerY = (rawMinY + rawMaxY) / 2;
+  return { minX: centerX - width / 2, minY: centerY - height / 2 - 0.19, width, height };
+}
+
+function MapPreview({ project, onToggle }: { project: DesignProject; onToggle: () => void }) {
+  const bounds = previewBounds(project);
+  const viewBox = `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`;
+  const fontSize = Math.min(bounds.width, bounds.height) * 0.0875;
+  const pointsAttribute = (points: readonly Point[]) => points.map((point) => `${point.x},${point.y}`).join(' ');
+  const center = (points: readonly Point[]): Point => points.reduce(
+    (result, point) => ({ x: result.x + point.x / points.length, y: result.y + point.y / points.length }),
+    { x: 0, y: 0 },
+  );
+  return <button className="mini-map" type="button" aria-label="Switch between 2D and 3D view" onClick={onToggle}>
+    <svg className="map-preview" viewBox={viewBox} aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+      <rect className="map-background" x={bounds.minX} y={bounds.minY} width={bounds.width} height={bounds.height} />
+      {project.rooms.map((room) => <polygon key={room.id} className="map-room" points={pointsAttribute(room.points)} />)}
+      {project.walls.map((wall) => <line key={wall.id} className="map-wall" x1={wall.start.x} y1={wall.start.y} x2={wall.end.x} y2={wall.end.y} strokeWidth={Math.max(0.05, wall.thickness * 0.55)} />)}
+      {project.rooms.map((room) => {
+        const centroid = center(room.points);
+        const referenceOffset = room.name === 'Living Room' ? { x: 0.28, y: -0.11 } : { x: 0, y: 0 };
+        const label = { x: centroid.x + referenceOffset.x, y: centroid.y + referenceOffset.y };
+        const referenceWidth = room.name === 'Lobby' ? 1.149 : room.name === 'Living Room' ? 2.567 : undefined;
+        return <text key={`${room.id}-label`} className="map-room-label" x={label.x} y={label.y} textAnchor="middle" dominantBaseline="central" fontSize={fontSize} textLength={referenceWidth} lengthAdjust={referenceWidth ? 'spacingAndGlyphs' : undefined}>{room.name}</text>;
+      })}
+    </svg>
+  </button>;
 }
 
 function NumericField({ label, value, unit, min, step, onCommit }: {

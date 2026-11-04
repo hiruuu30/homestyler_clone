@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { frameProjectCamera } from '../domain/camera';
 import type { DesignProject, Point } from '../domain/types';
 
 export type SceneViewportProps = {
@@ -59,8 +60,9 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
     scene.background = new THREE.Color('#eef1f2');
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 1000);
     const floorElevation = project.levels.find((level) => level.id === project.activeLevelId)?.elevation ?? 0;
-    const target = new THREE.Vector3(5, floorElevation, -4);
-    let radius = 17;
+    const initialFrame = frameProjectCamera(project, host.clientWidth / Math.max(1, host.clientHeight), camera.fov);
+    const target = new THREE.Vector3(initialFrame.targetX, initialFrame.targetY, initialFrame.targetZ);
+    let radius = initialFrame.radius;
     let azimuth = Math.PI / 4;
     let elevation = 0.82;
     const updateCamera = () => {
@@ -251,6 +253,8 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      radius = frameProjectCamera(project, camera.aspect, camera.fov).radius;
+      updateCamera();
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);

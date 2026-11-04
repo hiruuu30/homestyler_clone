@@ -5,3 +5,32 @@
 .danger-action{color:#b34b4b}.danger-action:hover{background:#fff6f6;border-color:#eccaca}
 
 .level-list{display:grid;gap:4px}.level-row{min-height:38px;display:flex;align-items:center;border:1px solid #e5e7e9;border-radius:5px;background:#fff}.level-row.active{border-color:#9dbbf0;background:#f5f8ff}.level-select{flex:1;min-width:0;height:38px;padding:0 8px;display:flex;align-items:center;gap:8px;border:0;background:transparent;text-align:left;color:#69717a;cursor:pointer}.level-row.active .level-select{color:#2565ce}.level-select span{min-width:0;display:flex;flex-direction:column;gap:2px;font-size:9px;font-weight:600}.level-select small{color:#92979e;font-size:8px;font-weight:400}.level-delete{height:28px;width:28px;margin-right:4px;display:grid;place-items:center;border:0;border-radius:4px;background:transparent;color:#9a7272;cursor:pointer}.level-delete:hover{background:#fff0f0;color:#ad4545}.add-level{margin-top:5px;cursor:pointer}
+
+/* Reference-aligned 2D overview: measured at 220×160, 18px from the right and 60px from the top. */
+.map-card{top:60px;right:18px;width:220px;height:160px;padding:8px;display:flex;flex-direction:column}
+.map-card>b{flex:none}
+.mini-map{height:108px;min-height:0;margin:7px 0;padding:0;display:block;overflow:hidden;background:#f4f5f6;text-align:center}
+.map-preview{display:block;width:100%;height:100%}
+.map-background{fill:#f4f5f6}
+.map-room{fill:#fff;stroke:#d1d5d9;stroke-width:.035}
+.map-wall{stroke:#727a83;stroke-linecap:round;stroke-linejoin:round}
+.map-room-label{fill:#464d55;font-family:'DM Sans',Arial,sans-serif;font-weight:600;pointer-events:none}
+.map-card>small{flex:none;color:#828890;font-size:8px}
+@media(max-width:580px){.map-card{top:7px;right:6px;width:116px;height:116px;padding:5px}.mini-map{height:55px;margin:5px 0}.map-card>small{font-size:7px}}
+
+/* The original overview occupies the top of the right pane, not the central canvas. */
+.inspector>.map-card{position:relative;top:auto;right:auto;width:220px;height:160px;flex:0 0 160px;margin:11px 18px 0 11px;padding:8px;display:flex;flex-direction:column}
+.inspector>.map-card>b{flex:none}
+.inspector>.map-card>.mini-map{height:108px;min-height:0;margin:7px 0;padding:0;display:block;overflow:hidden;background:#f4f5f6;text-align:center}
+.inspector>.map-card>small{flex:none;color:#828890;font-size:8px}
+@media(max-width:1050px){.inspector>.map-card{width:calc(100% - 24px);margin-left:12px;margin-right:12px}}
+
+/* The captured reference inset is a white plan canvas with no header/footer chrome. */
+.inspector>.map-card{position:relative;top:auto;right:auto;width:220px;height:160px;flex:0 0 160px;margin:11px 18px 0 11px;padding:0;border:0;border-radius:0;background:#fff;box-shadow:none;display:block;overflow:hidden}
+.inspector>.map-card>.mini-map{width:100%;height:100%;min-height:0;margin:0;padding:0;display:block;overflow:hidden;border:0;border-radius:0;background:#fff}
+.inspector>.map-card .map-preview{display:block;width:100%;height:100%}
+.inspector>.map-card .map-background{fill:#fff}
+.inspector>.map-card .map-room{fill:#fff;stroke:#ced2d6;stroke-width:.035}
+.inspector>.map-card .map-wall{stroke:#525860;stroke-linecap:round;stroke-linejoin:round}
+.inspector>.map-card .map-room-label{fill:rgba(0,0,0,.85);font-family:'DM Sans',Arial,sans-serif;font-weight:600;pointer-events:none}
+@media(max-width:1050px){.inspector>.map-card{width:calc(100% - 24px);height:160px;margin:11px 12px 0}}
