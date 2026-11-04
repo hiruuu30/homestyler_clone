@@ -75,6 +75,17 @@ function pointOnSegment(pointValue: Point, start: Point, end: Point, epsilon: nu
     && pointValue.y <= Math.max(start.y, end.y) + epsilon;
 }
 
+function segmentFraction(pointValue: Point, start: Point, end: Point, tolerance = 1e-8): number | null {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared <= 0) return null;
+  const fraction = ((pointValue.x - start.x) * dx + (pointValue.y - start.y) * dy) / lengthSquared;
+  const distanceToLine = Math.abs(cross(start, end, pointValue)) / Math.sqrt(lengthSquared);
+  if (distanceToLine > tolerance || fraction <= tolerance || fraction >= 1 - tolerance) return null;
+  return fraction;
+}
+
 function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
   const epsilon = 1e-9;
   const abC = cross(a, b, c);
@@ -625,27 +636,86 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
   const start = changes.start === undefined ? wall.start : point(changes.start, 'wall start');
   const end = changes.end === undefined ? wall.end : point(changes.end, 'wall end');
   if (start.x === end.x && start.y === end.y) throw new RangeError('wall endpoints must be different points');
+  const samePoint = (left: Point, right: Point) => left.x === right.x && left.y === right.y;
   const nodeKey = (levelId: string, value: Point) => JSON.stringify([levelId, value.x || 0, value.y || 0]);
-  const movedNodes = new Map<string, Point>([
-    [nodeKey(wall.levelId, wall.start), start],
-    [nodeKey(wall.levelId, wall.end), end],
-  ]);
-  const walls = project.walls.map((item) => {
+  const movedNodes = new Map<string, Point>();
+  const movedTargets: { levelId: string; point: Point }[] = [];
+  if (!samePoint(start, wall.start)) {
+    movedNodes.set(nodeKey(wall.levelId, wall.start), start);
+    movedTargets.push({ levelId: wall.levelId, point: start });
+  }
+  if (!samePoint(end, wall.end)) {
+    movedNodes.set(nodeKey(wall.levelId, wall.end), end);
+    movedTargets.push({ levelId: wall.levelId, point: end });
+  }
+  if (movedNodes.size === 0) return project;
+  const walls: Wall[] = project.walls.map((item) => {
     const nextStart = movedNodes.get(nodeKey(item.levelId, item.start)) ?? item.start;
     const nextEnd = movedNodes.get(nodeKey(item.levelId, item.end)) ?? item.end;
-    if (nextStart.x === item.start.x && nextStart.y === item.start.y && nextEnd.x === item.end.x && nextEnd.y === item.end.y) return item;
+    if (samePoint(nextStart, item.start) && samePoint(nextEnd, item.end)) return item;
     if (nextStart.x === nextEnd.x && nextStart.y === nextEnd.y) throw new RangeError(`endpoint edit would collapse wall: ${item.id}`);
     const updated = freeze({ ...item, start: point(nextStart, 'wall start'), end: point(nextEnd, 'wall end') });
     project.wallOpenings.filter((opening) => opening.wallId === item.id).forEach((opening) => validateOpening(updated, opening));
     return updated;
   });
+  let wallOpenings = [...project.wallOpenings];
+  const usedWallIds = new Set(walls.map((item) => item.id));
+  let wallSuffix = 1;
+  const nextWallId = () => {
+    let candidate = `wall-${wallSuffix}`;
+    while (usedWallIds.has(candidate)) candidate = `wall-${++wallSuffix}`;
+    usedWallIds.add(candidate);
+    return candidate;
+  };
+  const uniqueTargets = [...new Map(movedTargets.map((item) => [nodeKey(item.levelId, item.point), item])).values()];
+  uniqueTargets.forEach(({ levelId, point: junction }) => {
+    for (let index = 0; index < walls.length; index += 1) {
+      const host = walls[index];
+      if (host.levelId !== levelId || samePoint(junction, host.start) || samePoint(junction, host.end)) continue;
+      if (segmentFraction(junction, host.start, host.end) === null) continue;
+      const splitPoint = point(junction, 'wall junction');
+      const splitLength = Math.hypot(splitPoint.x - host.start.x, splitPoint.y - host.start.y);
+      const secondId = nextWallId();
+      const first = freeze({ ...host, end: splitPoint });
+      const second = freeze({ ...host, id: secondId, start: splitPoint });
+      const splitOpenings = wallOpenings.map((opening) => {
+        if (opening.wallId !== host.id) return opening;
+        const openingStart = opening.center - opening.width / 2;
+        const openingEnd = opening.center + opening.width / 2;
+        if (openingStart < splitLength && openingEnd > splitLength) {
+          throw new RangeError('cannot split a wall through an opening; move the opening first');
+        }
+        return openingStart >= splitLength
+          ? freeze({ ...opening, wallId: secondId, center: opening.center - splitLength })
+          : opening;
+      });
+      splitOpenings.filter((opening) => opening.wallId === host.id).forEach((opening) => validateOpening(first, opening));
+      splitOpenings.filter((opening) => opening.wallId === secondId).forEach((opening) => validateOpening(second, opening));
+      walls.splice(index, 1, first, second);
+      wallOpenings = splitOpenings;
+    }
+  });
   const rooms = project.rooms.map((room) => {
     const points = room.points.map((vertex) => movedNodes.get(nodeKey(room.levelId, vertex)) ?? vertex);
-    if (points.every((vertex, index) => vertex.x === room.points[index].x && vertex.y === room.points[index].y)) return room;
-    const validated = createPolygonRoom(room.id, room.name, points, room.floorMaterialId, room.levelId, project.units);
+    const moved = points.some((vertex, index) => !samePoint(vertex, room.points[index]));
+    const targets = uniqueTargets.filter((item) => item.levelId === room.levelId && !points.some((vertex) => samePoint(vertex, item.point)));
+    const expanded: Point[] = [];
+    let inserted = false;
+    for (let index = 0; index < points.length; index += 1) {
+      const from = points[index];
+      const to = points[(index + 1) % points.length];
+      expanded.push(from);
+      const insertions = targets
+        .map((item) => ({ point: item.point, fraction: segmentFraction(item.point, from, to) }))
+        .filter((item): item is { point: Point; fraction: number } => item.fraction !== null)
+        .sort((left, right) => left.fraction - right.fraction);
+      insertions.forEach((item) => { expanded.push(item.point); inserted = true; });
+    }
+    if (!moved && !inserted) return room;
+    const validated = createPolygonRoom(room.id, room.name, expanded, room.floorMaterialId, room.levelId, project.units);
     return freeze({ ...room, points: validated.points });
   });
-  return copyProject(project, { walls, rooms });
+  return copyProject(project, { walls, wallOpenings, rooms });
 }
 
 export function setFurnitureHidden(project: DesignProject, furnitureId: string, hidden: boolean): DesignProject {

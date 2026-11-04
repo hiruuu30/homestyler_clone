@@ -248,6 +248,43 @@ describe('domain model', () => {
     expect(project.rooms.find((room) => room.id === 'room-starter')?.points).toContainEqual({ x: 6.2, y: -0.5 });
   });
 
+  it('splits a wall and inserts a room vertex when an edited endpoint lands on an edge', () => {
+    const base = createStarterProject();
+    const boundary = createWall('boundary', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const branch = createWall('branch', { x: 2, y: 2 }, { x: 2, y: 1 });
+    const room = createPolygonRoom('t-room', 'T-junction room', [
+      { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 },
+    ]);
+    const project = { ...base, walls: [boundary, branch], rooms: [room] };
+    const joined = updateWallEndpoints(project, 'branch', { end: { x: 2, y: 0 } });
+
+    expect(joined.walls).toHaveLength(3);
+    expect(joined.walls.find((wall) => wall.id === 'boundary')).toMatchObject({ start: { x: 0, y: 0 }, end: { x: 2, y: 0 } });
+    expect(joined.walls.find((wall) => wall.id === 'wall-1')).toMatchObject({ start: { x: 2, y: 0 }, end: { x: 4, y: 0 } });
+    expect(joined.walls.find((wall) => wall.id === 'branch')?.end).toEqual({ x: 2, y: 0 });
+    expect(joined.rooms[0].points).toContainEqual({ x: 2, y: 0 });
+    expect(roomArea(joined.rooms[0])).toBe(8);
+    expect(project.walls).toHaveLength(2);
+    expect(project.rooms[0].points).toHaveLength(4);
+  });
+
+  it('reassigns openings when an endpoint split leaves them on one wall and rejects a through-opening cut', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const branch = createWall('branch', { x: 2, y: 2 }, { x: 2, y: 1 });
+    const project = { ...base, walls: [host, branch], rooms: [] };
+    const withWindow = addWallOpening(project, 'host', 'window');
+    const opening = withWindow.wallOpenings[0];
+    const rightSide = updateWallOpening(withWindow, opening.id, { center: 3.2, width: 0.5 });
+    const split = updateWallEndpoints(rightSide, 'branch', { end: { x: 2, y: 0 } });
+
+    expect(split.wallOpenings[0]).toMatchObject({ wallId: 'wall-1', width: 0.5 });
+    expect(split.wallOpenings[0].center).toBeCloseTo(1.2);
+    const throughOpening = addWallOpening(project, 'host', 'window');
+    expect(() => updateWallEndpoints(throughOpening, 'branch', { end: { x: 2, y: 0 } })).toThrow(/cannot split a wall through an opening/);
+    expect(project.walls).toHaveLength(2);
+  });
+
   it('rejects a connected-node edit that collapses a room edge or invalidates a hosted opening', () => {
     const project = createStarterProject();
     expect(() => updateWallEndpoints(project, 'wall-north', { end: { x: 4.2, y: 2.1 } })).toThrow(/self-intersect|non-zero length/);
