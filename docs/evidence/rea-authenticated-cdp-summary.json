@@ -1,0 +1,73 @@
+{
+  "tool": {
+    "name": "REA",
+    "version": "6.8.0",
+    "operations": [
+      "list-browser-targets",
+      "inspect-web-page"
+    ]
+  },
+  "browser": {
+    "name": "Chrome",
+    "version": "155.0.8059.39",
+    "cdp_port": 9224,
+    "profile": "fresh manually authenticated profile",
+    "managed_browser_reused": false,
+    "cookies_copied_or_read": false,
+    "private_control_channel_reused": false
+  },
+  "origins": [
+    "https://www.homestyler.com",
+    "https://3d.homestyler.com"
+  ],
+  "observations": [
+    {
+      "name": "homepage",
+      "dom_nodes": 5524,
+      "accessibility_nodes": 1584,
+      "evidence_id": "ev_6655a2e643220767afdd371243ee369cee542ddd23118673305dca65be2e1ab9"
+    },
+    {
+      "name": "authenticated workspace",
+      "dom_nodes": 6310,
+      "accessibility_nodes": 869,
+      "login_prompt": false,
+      "visible_controls": [
+        "My Workspace",
+        "My Designs",
+        "My Models",
+        "Upload Model"
+      ],
+      "evidence_id": "ev_3795c28ced2956099e53f546a16afb0dc0ebd1bb2c0df008213f41966e249ddc"
+    },
+    {
+      "name": "loaded editor",
+      "dom_nodes": 16655,
+      "accessibility_nodes": 1336,
+      "visible_controls": [
+        "Save",
+        "Render",
+        "2D",
+        "3D",
+        "Build",
+        "Furniture"
+      ],
+      "evidence_id": "ev_6e63ce27b52a4ecb5117c7f5eef5bd50bfabb357ad50f2ab43e2be8c828164d3"
+    }
+  ],
+  "scope": {
+    "capture": "policy-filtered DOM/accessibility inspection; accessibility text enabled",
+    "raw_captures": "private outside repository",
+    "exclusions": [
+      "script sources",
+      "console text",
+      "storage keys or fingerprints",
+      "JSON or WebSocket shapes",
+      "server/backend/catalog recovery",
+      "exhaustive feature proof"
+    ],
+    "editor_mutations_performed": false,
+    "pre_attach_network_history_available": false,
+    "attachment_mode": "finite passive capture per command"
+  }
+}

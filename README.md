@@ -1,6 +1,6 @@
 # Independent room-planner prototype and Homestyler research
 
-**Status:** local feature implementation is in progress by the user's latest direction. Original Homestyler catalog assets are deferred. Nothing has been pushed or deployed.
+**Status:** the incomplete generic prototype was explicitly authorized for release. Initial code-release commit `c5d4638c312c5897ddfb802a4a299ffddadaf7cd` is pushed to `hiruuu30/homestyler_clone` main; production deployment to Vercel project `homestyler-clone` under team `hiroo1` is READY for that commit at [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/). Public HTTP and basic 2D/3D load checks passed; this is not a complete-clone or parity claim. Original Homestyler catalog assets remain deferred.
 
 ## Current milestone
 
@@ -12,12 +12,12 @@ This is a generic starter editor, not a demonstrated Homestyler clone. No pixel 
 
 - **Verified full-parity completion: 0%.** This is the share of required features/states accepted against exact functional and pixel-level parity, not a measure of research or code volume.
 - **Original catalog asset coverage: 0%.** The source catalog is deferred and the application does not contain original Homestyler models, materials or textures.
-- Strict full functional and pixel-level parity remains the goal. The user's direction permits continued local implementation of non-catalog features; it does not waive the acceptance requirement or authorize pushing or deployment.
+- Strict full functional and pixel-level parity remains the goal and its acceptance gates still apply to any complete-clone claim. The user nevertheless explicitly authorized this incomplete generic prototype release despite unmet gates.
 - Use only independently authored code and generic placeholder assets until an authorized catalog corpus is delivered. Do not use private service endpoints or claim the placeholders are equivalent.
 
 ## Discovery background
 
-The authenticated editor research, technical specification, REA capability limits and feature ledger remain useful as evidence and implementation references. REA static analysis worked on one public script. REA could not attach to the authenticated Homestyler browser because no supported endpoint was supplied; it did successfully inspect this prototype in a separate disposable Chromium instance launched with an explicit loopback CDP endpoint. Neither result establishes complete Homestyler internals or exhaustive feature coverage.
+The authenticated editor research, technical specification, REA capability limits and feature ledger remain useful as evidence and implementation references. REA static analysis worked on one public script. The original managed browser remains not externally attachable: its private control channel is not a supported loopback CDP endpoint. Separately, a fresh manually authenticated Chrome profile launched with explicit loopback CDP port `9224` was passively inspected with exact origin allowlists; this produced safe generic DOM/accessibility counts but does not establish complete Homestyler internals or exhaustive feature coverage.
 
 ## Project files
 
@@ -26,4 +26,5 @@ The authenticated editor research, technical specification, REA capability limit
 - [REA capabilities: worked, blocked and untested](docs/REA_CAPABILITY_RESULTS.md)
 - [Feature and verification ledger](docs/feature-ledger.csv)
 - [Sanitized static-analysis evidence](docs/evidence/rea-static-summary.json)
+- [Sanitized authenticated-CDP evidence](docs/evidence/rea-authenticated-cdp-summary.json)
 - [Historical graphics audit](docs/WEBGL_ENVIRONMENT_AUDIT.md)
