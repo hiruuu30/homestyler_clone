@@ -57,3 +57,7 @@ The sanitized [machine-readable summary](evidence/rea-static-summary.json) conta
 ## What remains needed
 
 To use REA for authenticated observation, obtain a documented authorized loopback CDP endpoint from a browser intentionally launched for that purpose, sign in there manually, and perform origin-scoped discovery. Do not assume the existing managed browser's login is shared. Even successful observation would not recover server implementations, private AI models, proprietary catalogs or exhaustive hidden-feature behavior.
+
+## Follow-up: local CDP attach worked on a separate browser
+
+For a controlled tool check, a disposable local Chromium profile was launched against the independent prototype with DevTools bound only to `127.0.0.1:9223`. REA successfully listed the page using the exact origin filter `http://127.0.0.1:4173`, then `inspect-web-page` returned a policy-filtered DOM/accessibility observation (307 DOM nodes). No Homestyler account, cookies, private service, or authenticated browser session was involved; script sources and raw network/storage values were not requested. This verifies the documented REA attachment path when a purpose-launched CDP endpoint exists, while the earlier managed Homestyler session remains blocked for REA attachment.

@@ -1,22 +1,29 @@
-# Independent room planner investigation
+# Independent room-planner prototype and Homestyler research
 
-**Status: evidence and implementation handoff only. No application has been built or deployed from this repository.**
+**Status:** local feature implementation is in progress by the user's latest direction. Original Homestyler catalog assets are deferred. Nothing has been pushed or deployed.
 
-The authenticated Homestyler editor works in the Cloud Browser. Verified workflows include a free room template, rectangular-room creation and Undo, 2D/3D switching, a wall-thickness edit and Undo, sofa placement and 45° rotation, camera orbit, floor-material assignment and Undo, and private save/reopen with the object transform preserved. The follow-up rectangle displayed `Unnamed / 1.45 m²`; the Living Room finish changed to `Wooden Floor_81` in 2D and 3D. Both follow-up test edits were undone. Other room shapes, material targeting/UV editing, advanced/premium workflows and exhaustive parity remain unverified.
+## Current milestone
 
-REA 6.8.0 is installed. Its CLI and a bounded static JavaScript analysis worked; authenticated browser observation through REA was blocked because no supported attachable CDP endpoint was available. The Cloud Browser observations are separate from REA. Its limited host-routed CDP command surface is not an endpoint that REA can attach to.
+Verified locally in isolated Chromium: generic furniture can be dragged in both the 2D plan and 3D scene; a 3D floor-plane drag updates the shared project and is undoable/redoable. The inspector edits position, size, rotation, wall thickness and wall height. Projects support named floors with distinct elevations, per-floor geometry, floor switching, undoable deletion, and local save/reopen. Local browser checks confirmed floor switching/filtering, wall-height editing, and persistence after reload. The strict TypeScript/Vite build passes and all 22 unit tests pass; the build still reports a large 3D bundle warning.
 
-## Handoff documents
+This is a generic starter editor, not a demonstrated Homestyler clone. No pixel comparison has been done, no feature has passed Homestyler parity acceptance, and exact camera, collision, snapping, advanced modeling, cloud and catalog behaviors remain unverified.
 
-- [Technical specification and authenticated observations](docs/TECHNICAL_SPECIFICATION.md)
-- [Codex Cloud implementation plan](docs/CODEX_CLOUD_IMPLEMENTATION_PLAN.md)
+## Progress and boundaries
+
+- **Verified full-parity completion: 0%.** This is the share of required features/states accepted against exact functional and pixel-level parity, not a measure of research or code volume.
+- **Original catalog asset coverage: 0%.** The source catalog is deferred and the application does not contain original Homestyler models, materials or textures.
+- Strict full functional and pixel-level parity remains the goal. The user's direction permits continued local implementation of non-catalog features; it does not waive the acceptance requirement or authorize pushing or deployment.
+- Use only independently authored code and generic placeholder assets until an authorized catalog corpus is delivered. Do not use private service endpoints or claim the placeholders are equivalent.
+
+## Discovery background
+
+The authenticated editor research, technical specification, REA capability limits and feature ledger remain useful as evidence and implementation references. REA static analysis worked on one public script. REA could not attach to the authenticated Homestyler browser because no supported endpoint was supplied; it did successfully inspect this prototype in a separate disposable Chromium instance launched with an explicit loopback CDP endpoint. Neither result establishes complete Homestyler internals or exhaustive feature coverage.
+
+## Project files
+
+- [Technical specification and observations](docs/TECHNICAL_SPECIFICATION.md)
+- [Local implementation and release plan](docs/CODEX_CLOUD_IMPLEMENTATION_PLAN.md)
 - [REA capabilities: worked, blocked and untested](docs/REA_CAPABILITY_RESULTS.md)
 - [Feature and verification ledger](docs/feature-ledger.csv)
 - [Sanitized static-analysis evidence](docs/evidence/rea-static-summary.json)
-- [Historical graphics audit — superseded for current editor startup](docs/WEBGL_ENVIRONMENT_AUDIT.md)
-
-**Scope is fixed at strict full functional and pixel-level visual parity.** The user has explicitly rejected a narrower implementation. Do not build an application or deploy anything until the evidence, implementation approach, legal assets, technical resources, and acceptance plan can support that full-parity requirement. No partial app, prototype, mockup, or deployment is authorized as a substitute.
-
-The proposed implementation must use independently authored code and owned/compatibly licensed assets, not Homestyler private service endpoints or redistributed proprietary models. Removing subscription gates from a new app does not provide zero-cost unlimited rendering, AI, storage or catalog delivery.
-
-The requested GitHub repository and Vercel account scope were verified. This repository currently contains evidence and handoff documents only. The two newly confirmed basic workflows do not pass the full-parity feasibility gate: comprehensive functional references, legal catalog coverage, advanced/server-dependent implementations, operational resources and a frozen pixel-reference suite are still missing. No application implementation or production deployment is authorized while those requirements remain unsupported.
+- [Historical graphics audit](docs/WEBGL_ENVIRONMENT_AUDIT.md)
