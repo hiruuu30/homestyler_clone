@@ -11,6 +11,7 @@ import {
   updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
+import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './export/deliverables';
 import { PlanCanvas } from './components/PlanCanvas';
 const SceneViewport = lazy(() => import('./components/SceneViewport'));
 
@@ -241,6 +242,24 @@ export default function App() {
     URL.revokeObjectURL(url);
     notify('Project JSON exported');
   }
+  function downloadText(content: string, filename: string, type: string) {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function exportFloorPlan() {
+    downloadText(exportPlanSvg(project, activeLevelId), deliverableFileName(project.name, 'svg'), 'image/svg+xml;charset=utf-8');
+    notify(`${activeLevel.name} SVG plan exported`);
+  }
+  function exportSchedule() {
+    downloadText(exportQuantitiesCsv(project), deliverableFileName(project.name, 'csv'), 'text/csv;charset=utf-8');
+    notify('Project quantities CSV exported');
+  }
   async function importProject(file?: File) {
     if (!file) return;
     try {
@@ -378,6 +397,8 @@ export default function App() {
             <button className="action-row" onClick={newDesign}><FilePlus2 size={16} />New design</button>
             <button className="action-row" onClick={() => importRef.current?.click()}><Upload size={16} />Import RoomLab JSON</button>
             <button className="action-row" onClick={exportProject}><Download size={16} />Export RoomLab JSON</button>
+            <button className="action-row" onClick={exportFloorPlan}><Download size={16} />Export active-floor SVG plan</button>
+            <button className="action-row" onClick={exportSchedule}><Download size={16} />Export project quantities CSV</button>
             <div className="section-label">HIDDEN OBJECTS · {activeLevel.name.toUpperCase()}</div>
             {visibleProject.furniture.filter((item) => item.hidden).map((item) => <button key={item.id} className="action-row hidden-object-row" onClick={() => { commit(setFurnitureHidden(project, item.id, false)); setSelectedId(item.id); notify('Object shown'); }}><Eye size={15} /><span>Show {item.name}</span></button>)}
             {!visibleProject.furniture.some((item) => item.hidden) && <p className="hidden-empty">No hidden objects on this floor.</p>}
