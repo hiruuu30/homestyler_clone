@@ -33,6 +33,10 @@ The [browser-observation guide](https://github.com/morluto/rea/blob/main/docs/br
 
 Process inspection found `--remote-debugging-pipe`, not a debugging-port flag. REA's documented target-discovery command against the conventional loopback address failed. No arbitrary listener was treated as CDP; no debugging port was opened or exposed, private control pipe reused, session cookies copied, or browser security protections disabled. This establishes failure of the tested supported attachment path, not proof that every possible port was probed.
 
+### Follow-up: managed CDP commands are not REA attachment
+
+The current browser's installed `browser_cdp` tool contract was inspected through its help. It offers a host-routed allowlist for the current tab or an observed frame: layout, DOM, accessibility and selected input commands. It explicitly excludes arbitrary attach, credentials, files and browser-global commands. This is not a supplied loopback debugging endpoint and cannot be treated as one by `rea list-browser-targets`. No commands through this managed CDP surface were invoked in the follow-up; no new REA browser session or capture was created. The browser fallback did confirm a basic rectangle and floor-material change separately, as recorded in the technical specification.
+
 ## Successful static test — deliberately narrow
 
 Fetched the public [Homestyler help page](https://www.homestyler.com/learn-help) as inert HTML and selected one 619-byte inline JavaScript block. It was never executed. Neither authenticated cookies nor private editor APIs were used.

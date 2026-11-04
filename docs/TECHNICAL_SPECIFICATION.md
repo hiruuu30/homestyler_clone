@@ -2,7 +2,7 @@
 
 ## What is established
 
-The authenticated Homestyler editor now loads in the supplied Cloud Browser. The earlier WebGL startup failure is historical, not the current blocker. A free template was opened in both 2D and 3D; a wall edit and Undo, furniture placement and rotation, camera orbit, and private saving/reopening were successfully exercised.
+The authenticated Homestyler editor loads in the supplied Cloud Browser. The earlier WebGL startup failure is historical, not the current blocker. A free template was opened in both 2D and 3D; rectangular-room creation, wall editing, furniture placement and rotation, floor-material assignment, camera orbit, and private saving/reopening were successfully exercised. Undo was confirmed for the wall edit, new rectangle and material change. The two follow-up edits were restored rather than explicitly saved.
 
 This repository is still a discovery and Codex Cloud handoff, **not an implemented or deployed clone**. Pixel-for-pixel and full-feature parity have not been established. **The user has confirmed strict full functional and pixel-level visual parity as the fixed requirement and rejected a narrower implementation. Do not build an application or deploy it until evidence demonstrates that this full-parity requirement can be supported.** No partial substitute, prototype, mockup, or deployment is authorized.
 
@@ -25,6 +25,8 @@ REA 6.8.0 runs here and successfully parsed one public help-page JavaScript snip
 
 The [REA browser guide](https://github.com/morluto/rea/blob/main/docs/browser-observation.md) requires an explicitly supplied, authorized Chrome-family CDP endpoint. Its observation surface is passive, not general browser control. No debugging port was exposed, cookies exported, private browser channel repurposed, or subscription restriction bypassed.
 
+The current Cloud Browser's installed `browser_cdp` contract was also inspected. It exposes a small host-routed allowlist for tab/frame DOM, layout, accessibility and selected input commands; it explicitly does not expose arbitrary attach, browser-global commands or a debugging endpoint. No commands through that surface were invoked in this follow-up, and REA did not attach. A managed CDP command API is not a CDP URL usable by an external CLI.
+
 The historical graphics/static-analysis failures remain in [the prior audit](WEBGL_ENVIRONMENT_AUDIT.md), clearly marked as superseded where current tests differ. Current results are summarized separately in [REA capability results](REA_CAPABILITY_RESULTS.md).
 
 ## Authenticated workflows actually exercised
@@ -34,20 +36,25 @@ All tests used a new disposable design and a template visibly marked **Free**, n
 | Workflow | Action and observed result | Verification boundary |
 | --- | --- | --- |
 | Entry/setup | Manual sign-in; dismissed onboarding; selected metre units and the left-drag-orbit/right-drag-pan convention | The loaded template subsequently displayed mixed units; do not infer one global unit behavior |
-| Plan/template | Build → Select Templates → Room Templates → **The Bright Minimal Room**, marked Free; geometry loaded with lobby and Living Room | Rectangular-room tool was entered, but attempts did not produce confirmed new geometry; manual drawing remains unverified |
+| Plan/template | Build → Select Templates → Room Templates → **The Bright Minimal Room**, marked Free; geometry loaded with lobby and Living Room | Confirms this template, not arbitrary import or geometry behavior |
 | Plan dimensions | Total building area displayed `504.91 ft²`; lobby `78.40 ft²`; Living Room `339.95 ft²`; walls/openings and dimension annotations visible | These are displayed reference values, not a recovered geometry schema |
+| Rectangular room | Follow-up on the disposable saved design: Build → Draw Rooms → Draw Rooms (R); drawing parameters showed By inner edge, thickness `0.24 m`, Non-weight bearing. A detached rectangle became completed walls with `Unnamed / 1.45 m²`; inner dimensions displayed `0.815` and `1.777 m`. Total Building Area changed `46.91` → `49.83 m²`; Undo removed it and restored `46.91 m²` | Earlier unsuccessful attempts are superseded for basic rectangular-room creation only. L/T rooms, numeric entry, joins, snapping, adjacent-room behavior, save/reopen and clean gesture replay are not verified |
 | Wall editing | Selected a straight wall; thickness `9.45 in` → `8`; committed with Enter; displayed thickness became `8.00`, Living Room area `340.64 ft²` | Confirms a real geometric/property update, not only a typed field |
 | Undo | Toolbar Undo restored thickness `9.45` and Living Room area `339.95 ft²` | Redo and complete history semantics not tested |
 | Furniture | Decorate → Furniture → Sofas; dragged an unmarked tile onto the room; selected item identified as `multi-seat sofa-Keith Haring Style` | No paid/check-in-locked tile was unlocked; no catalog models were copied |
 | Object properties | Sofa width `6' 1''`, length `3' 4''`, height `2' 10''`, elevation `0' 0''`; selection box and handles visible | Numeric resizing, constraints and snapping were not tested |
 | Rotation | Space changed the selected sofa's blue-axis rotation `0` → `45°`; footprint/distance annotations changed | Other rotation axes were visible but not exercised |
-| Finishes | Decorate → Finish → Floor; wood swatches loaded. Tiles, Marble, Mosaic, Wallpaper, Tile combination, Color, carpets and other categories visible | Swatch drags and click/surface attempts did not produce a confirmed material change. Application/UV editing remain unverified, not disproven |
+| Finishes | Decorate → Finish → Floor; wood swatches loaded. Tiles, Marble, Mosaic, Wallpaper, Tile combination, Color, carpets and other categories visible | Category/catalog observation is distinct from surface assignment |
+| Floor-material assignment | Follow-up: used the first unmarked wood swatch, shown as `1463*1463 (mm)`. Living Room changed from a light finish to visible long wood planks in 2D and 3D, while lobby remained light. The 3D Basic Style panel identified `Wooden Floor_81`. Undo returned the material name `Small-format Limestone Tile II` and the original light texture | The intended drag target was lobby, but the actual changed surface was Living Room; precise pointer/drop targeting is not established. No wall/ceiling/object materials, brush/sample behavior, UV edits or material save/reopen were tested |
+| Material properties | Basic Style exposed No pattern, Material, Color overlay off, Rotation Angle `0°`, horizontal/vertical movement `0 m`, horizontal/vertical scale `1.0` and Reset controls | Controls and values observed only; adjustments were not exercised |
 | Views | Bottom 2D/3D toggles switched the same room and sofa between plan and perspective; inset view showed the other projection | Roam was visible, not exercised; do not infer RCP/elevation behavior from labels |
 | Camera | Deselected object, then left-dragged clear canvas; the room visibly orbited | Right-drag pan, zoom, Q/E height and saved-camera semantics not verified |
 | Saving | Save showed `Saving...`. File → Save As exposed name, privacy, style, room-count fields and neighborhood address; name guidance 3–60 characters; address up to 128 | Disappearing spinner alone was not treated as success |
 | Private round-trip | Saved `Cue editor observation test 2026-11-04` with **Private** selected. It appeared in My Designs with a lock icon; reopened its thumbnail; room and sofa returned. Sofa selection again showed blue-axis `45°` and original dimensions | Verified in the same browser/account. Exact camera equality, cross-device persistence, versions and conflict behavior not tested |
 
 Two disposable test entries were created while exercising Save and Save As: **The Bright Minimal Room** and **Cue editor observation test 2026-11-04**. Both displayed lock icons in My Designs. No pre-existing design was opened for editing or deleted.
+
+The follow-up reused **Cue editor observation test 2026-11-04** and explicitly undid both new mutations. No Save/Save As, trial, render or AI job was triggered in this follow-up. Drawing and material drags each returned browser-tool `ACTION_IN_DOUBT`; they were inspected, not blindly replayed or counted as success. Later pointer movement, the completed room/area, the changed 2D/3D texture and material name, and their Undo results provide the actual evidence. Texture/property updates were asynchronous. These findings establish outcomes, not a perfectly replayable input trace or a Homestyler defect.
 
 ## Visible controls are not automatically verified features
 
@@ -91,7 +98,7 @@ Represent edits as reversible commands. One pointer drag should be one undoable 
 
 Use glTF/GLB assets with dimensions, bounding boxes, thumbnails, LODs and collision proxies. Maintain source/author/license/redistribution records. Validate user imports and texture/geometry resource budgets. Build a redistributable catalog independently; the observed sofa and original catalog are references only, not included assets. A handful of placeholders is not catalog parity.
 
-Persist PBR inputs, UV transforms, surface-side assignments and instance overrides. Material brush, sample and paint behavior require further reference observation because they were not successfully exercised here. A proposed implementation must not be mislabeled as observed behavior.
+Persist PBR inputs, UV transforms, surface-side assignments and instance overrides. One Living Room floor-material assignment and Undo are confirmed. Brush/sample semantics, precise surface targeting, per-face assignment, UV adjustments and persistence still require further reference observation. A proposed implementation must not be mislabeled as observed behavior.
 
 ### Persistence and outputs
 

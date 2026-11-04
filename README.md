@@ -2,9 +2,9 @@
 
 **Status: evidence and implementation handoff only. No application has been built or deployed from this repository.**
 
-The authenticated Homestyler editor now works in the Cloud Browser. Verified workflows include a free room template, 2D/3D view switching, a wall-thickness edit and Undo, sofa placement and 45° rotation, camera orbit, and private save/reopen with the object transform preserved. Manual room drawing and material application were attempted but not confirmed.
+The authenticated Homestyler editor works in the Cloud Browser. Verified workflows include a free room template, rectangular-room creation and Undo, 2D/3D switching, a wall-thickness edit and Undo, sofa placement and 45° rotation, camera orbit, floor-material assignment and Undo, and private save/reopen with the object transform preserved. The follow-up rectangle displayed `Unnamed / 1.45 m²`; the Living Room finish changed to `Wooden Floor_81` in 2D and 3D. Both follow-up test edits were undone. Other room shapes, material targeting/UV editing, advanced/premium workflows and exhaustive parity remain unverified.
 
-REA 6.8.0 is installed. Its CLI and a bounded static JavaScript analysis worked; authenticated browser observation through REA was blocked because no supported attachable CDP endpoint was available. The Cloud Browser observations are separate from REA.
+REA 6.8.0 is installed. Its CLI and a bounded static JavaScript analysis worked; authenticated browser observation through REA was blocked because no supported attachable CDP endpoint was available. The Cloud Browser observations are separate from REA. Its limited host-routed CDP command surface is not an endpoint that REA can attach to.
 
 ## Handoff documents
 
@@ -19,4 +19,4 @@ REA 6.8.0 is installed. Its CLI and a bounded static JavaScript analysis worked;
 
 The proposed implementation must use independently authored code and owned/compatibly licensed assets, not Homestyler private service endpoints or redistributed proprietary models. Removing subscription gates from a new app does not provide zero-cost unlimited rendering, AI, storage or catalog delivery.
 
-The requested GitHub repository and Vercel account scope were verified. This repository currently contains evidence and handoff documents only. Any future production release requires a complete implementation and passing functional, pixel-comparison, licensing and resource checks. Until full-parity support is substantiated, do not start app implementation or deploy to Vercel.
+The requested GitHub repository and Vercel account scope were verified. This repository currently contains evidence and handoff documents only. The two newly confirmed basic workflows do not pass the full-parity feasibility gate: comprehensive functional references, legal catalog coverage, advanced/server-dependent implementations, operational resources and a frozen pixel-reference suite are still missing. No application implementation or production deployment is authorized while those requirements remain unsupported.
