@@ -267,7 +267,13 @@ export function convertProjectUnits(project: DesignProject, units: Units): Desig
       elevation: scaleLength(level.elevation, factor),
       height: scaleLength(level.height, factor),
     })),
-    rooms: project.rooms.map((room) => freeze({ ...room, points: freeze(room.points.map(scalePoint)) })),
+    rooms: project.rooms.map((room) => freeze({
+      ...room,
+      points: freeze(room.points.map(scalePoint)),
+      ...(room.holes === undefined ? {} : {
+        holes: freeze(room.holes.map((hole) => freeze(hole.map(scalePoint)))),
+      }),
+    })),
     walls: project.walls.map((wall) => freeze({
       ...wall,
       start: scalePoint(wall.start),
@@ -359,6 +365,115 @@ export function createPolygonRoom(
   });
 }
 
+function pointStrictlyInsidePolygon(value: Point, polygon: readonly Point[]): boolean {
+  let inside = false;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index];
+    const end = polygon[(index + 1) % polygon.length];
+    const edgeLength = Math.hypot(end.x - start.x, end.y - start.y);
+    if (edgeLength > 0 && Math.abs(cross(start, end, value)) / edgeLength <= 1e-9
+      && pointOnSegment(value, start, end, 1e-9)) return false;
+    const crossesRay = (start.y > value.y) !== (end.y > value.y)
+      && value.x < (end.x - start.x) * (value.y - start.y) / (end.y - start.y) + start.x;
+    if (crossesRay) inside = !inside;
+  }
+  return inside;
+}
+
+function polygonBoundariesIntersect(left: readonly Point[], right: readonly Point[]): boolean {
+  for (let first = 0; first < left.length; first += 1) {
+    for (let second = 0; second < right.length; second += 1) {
+      if (segmentsIntersect(left[first], left[(first + 1) % left.length], right[second], right[(second + 1) % right.length])) return true;
+    }
+  }
+  return false;
+}
+
+function validateRoomHoles(
+  outline: readonly Point[],
+  holes: readonly (readonly Point[])[],
+  units: Units,
+): readonly (readonly Point[])[] {
+  if (!Array.isArray(holes)) throw new TypeError('room holes must be an array of polygons');
+  const minimumArea = 0.01 * unitScale('m', units) ** 2;
+  const normalized: Point[][] = [];
+  let totalHoleArea = 0;
+  holes.forEach((vertices, holeIndex) => {
+    if (!Array.isArray(vertices)) throw new TypeError(`room hole ${holeIndex + 1} must be a polygon`);
+    const points = vertices.map((vertex, index) => point(vertex, `room hole ${holeIndex + 1} point ${index + 1}`));
+    if (points.length > 1 && points[0].x === points.at(-1)!.x && points[0].y === points.at(-1)!.y) points.pop();
+    if (points.length < 3) throw new RangeError('a room hole needs at least three distinct vertices');
+    for (let index = 0; index < points.length; index += 1) {
+      const current = points[index];
+      const next = points[(index + 1) % points.length];
+      if (Math.hypot(next.x - current.x, next.y - current.y) <= 1e-9) {
+        throw new RangeError('room-hole edges must have non-zero length');
+      }
+    }
+    if (hasSelfIntersection(points)) throw new RangeError('room hole cannot self-intersect');
+    const area = Math.abs(signedPolygonArea(points));
+    if (area < minimumArea) throw new RangeError('room-hole area must be at least 0.01 square metres');
+    if (points.some((vertex) => !pointStrictlyInsidePolygon(vertex, outline))
+      || polygonBoundariesIntersect(points, outline)) {
+      throw new RangeError('room holes must lie strictly inside the room outline');
+    }
+    for (const existing of normalized) {
+      if (polygonBoundariesIntersect(points, existing)
+        || pointStrictlyInsidePolygon(points[0], existing)
+        || pointStrictlyInsidePolygon(existing[0], points)) {
+        throw new RangeError('room holes must not overlap or contain one another');
+      }
+    }
+    totalHoleArea += area;
+    normalized.push(points);
+  });
+  if (Math.abs(signedPolygonArea(outline)) - totalHoleArea < minimumArea) {
+    throw new RangeError('room must retain at least 0.01 square metres of floor area');
+  }
+  return freeze(normalized.map((hole) => freeze(hole)));
+}
+
+/** Create a simple room outline with validated interior void polygons. */
+export function createPolygonRoomWithHoles(
+  roomId: string,
+  name: string,
+  vertices: readonly Point[],
+  holes: readonly (readonly Point[])[],
+  floorMaterialId = DEFAULT_MATERIAL_ID,
+  levelId = DEFAULT_LEVEL_ID,
+  units: Units = 'm',
+): Room {
+  const room = createPolygonRoom(roomId, name, vertices, floorMaterialId, levelId, units);
+  return freeze({ ...room, holes: validateRoomHoles(room.points, holes, units) });
+}
+
+function roomWithHoles(room: Room, holes: readonly (readonly Point[])[], units: Units): Room {
+  const validated = createPolygonRoomWithHoles(room.id, room.name, room.points, holes, room.floorMaterialId, room.levelId, units);
+  return freeze({ ...room, ...validated, ceilingVisible: room.ceilingVisible });
+}
+
+function revalidateRoomOutline(room: Room, vertices: readonly Point[], units: Units): Room {
+  const validated = createPolygonRoom(room.id, room.name, vertices, room.floorMaterialId, room.levelId, units);
+  if (room.holes === undefined) return freeze({ ...room, points: validated.points });
+  return freeze({ ...room, points: validated.points, holes: validateRoomHoles(validated.points, room.holes, units) });
+}
+
+export function addRoomHole(project: DesignProject, roomId: string, vertices: readonly Point[]): DesignProject {
+  const room = project.rooms.find((item) => item.id === id(roomId, 'room id'));
+  if (!room) throw new RangeError(`unknown room: ${roomId}`);
+  const updated = roomWithHoles(room, [...(room.holes ?? []), vertices], project.units);
+  return copyProject(project, { rooms: project.rooms.map((item) => item.id === room.id ? updated : item) });
+}
+
+export function removeRoomHole(project: DesignProject, roomId: string, holeIndex: number): DesignProject {
+  const room = project.rooms.find((item) => item.id === id(roomId, 'room id'));
+  if (!room) throw new RangeError(`unknown room: ${roomId}`);
+  const holes = room.holes ?? [];
+  if (!Number.isInteger(holeIndex) || holeIndex < 0 || holeIndex >= holes.length) throw new RangeError('room hole index is out of range');
+  const updated = roomWithHoles(room, holes.filter((_, index) => index !== holeIndex), project.units);
+  return copyProject(project, { rooms: project.rooms.map((item) => item.id === room.id ? updated : item) });
+}
+
 export function createWall(
   wallId: string,
   start: Point,
@@ -439,8 +554,7 @@ export function addWall(project: DesignProject, input: Wall): DesignProject {
       insertions.forEach((item) => { expanded.push(item.point); inserted = true; });
     }
     if (!inserted) return room;
-    const validated = createPolygonRoom(room.id, room.name, expanded, room.floorMaterialId, room.levelId, project.units);
-    return freeze({ ...room, points: validated.points });
+    return revalidateRoomOutline(room, expanded, project.units);
   });
   return copyProject(next, { rooms });
 }
@@ -541,8 +655,7 @@ export function repairWallTopology(project: DesignProject): DesignProject {
     }
     if (expanded.length === room.points.length) return room;
     changedRooms = true;
-    const validated = createPolygonRoom(room.id, room.name, expanded, room.floorMaterialId, room.levelId, project.units);
-    return freeze({ ...room, points: validated.points });
+    return revalidateRoomOutline(room, expanded, project.units);
   });
   if (next === project && !changedRooms) return project;
   return copyProject(next, changedRooms ? { rooms } : {});
@@ -642,8 +755,7 @@ export function joinCollinearWalls(project: DesignProject, wallId: string, neigh
       && incomingX * outgoingX + incomingY * outgoingY > 0;
     if (!straight) return room;
     const points = room.points.filter((_, vertexIndex) => vertexIndex !== index);
-    const validated = createPolygonRoom(room.id, room.name, points, room.floorMaterialId, room.levelId, project.units);
-    return freeze({ ...room, points: validated.points });
+    return revalidateRoomOutline(room, points, project.units);
   });
   const walls = project.walls.flatMap((wall) => wall.id === selected.id ? [mergedWall] : wall.id === neighbor.id ? [] : [wall]);
   return copyProject(project, { walls, wallOpenings: [...remainingOpenings, ...migratedOpenings], rooms });
@@ -1045,8 +1157,7 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
       insertions.forEach((item) => { expanded.push(item.point); inserted = true; });
     }
     if (!moved && !inserted) return room;
-    const validated = createPolygonRoom(room.id, room.name, expanded, room.floorMaterialId, room.levelId, project.units);
-    return freeze({ ...room, points: validated.points });
+    return revalidateRoomOutline(room, expanded, project.units);
   });
   let next = copyProject(project, { walls, wallOpenings, rooms });
   const crossingCuts: WallCrossingCut[] = [];
@@ -1127,13 +1238,8 @@ export function splitWall(project: DesignProject, wallId: string, ratio = 0.5): 
 
 export function roomArea(room: Room): number {
   if (room.points.length < 3) throw new RangeError('a room needs at least three points');
-  let sum = 0;
-  for (let index = 0; index < room.points.length; index += 1) {
-    const current = room.points[index];
-    const next = room.points[(index + 1) % room.points.length];
-    sum += current.x * next.y - next.x * current.y;
-  }
-  const area = Math.abs(sum) / 2;
+  const area = Math.abs(signedPolygonArea(room.points))
+    - (room.holes ?? []).reduce((sum, hole) => sum + Math.abs(signedPolygonArea(hole)), 0);
   if (!Number.isFinite(area) || area <= 0) throw new RangeError('room points must enclose a positive area');
   return area;
 }
@@ -1165,7 +1271,16 @@ export function normalizeProject(value: unknown): DesignProject {
   const fallbackLevelId = levels[0].id;
   const activeLevelId = typeof candidate.activeLevelId === 'string' && knownLevels.has(candidate.activeLevelId) ? candidate.activeLevelId : fallbackLevelId;
   const levelFor = (item: { levelId?: string }) => item.levelId && knownLevels.has(item.levelId) ? item.levelId : fallbackLevelId;
-  const rooms = candidate.rooms.map((room) => freeze({ ...room, levelId: levelFor(room) })) as Room[];
+  const rooms = candidate.rooms.map((value) => {
+    if (!value || typeof value !== 'object') throw new TypeError('room must be an object');
+    const room = value as Room;
+    const levelId = levelFor(room);
+    if (room.holes === undefined) return freeze({ ...room, levelId });
+    const validated = createPolygonRoomWithHoles(
+      room.id, room.name, room.points, room.holes, room.floorMaterialId, levelId, units,
+    );
+    return freeze({ ...room, ...validated, levelId, ceilingVisible: typeof room.ceilingVisible === 'boolean' ? room.ceilingVisible : true });
+  });
   const walls = candidate.walls.map((wall) => freeze({ ...wall, levelId: levelFor(wall) })) as Wall[];
   const wallOpenings: WallOpening[] = (candidate.wallOpenings ?? []).map((value) => {
     if (!value || typeof value !== 'object') throw new TypeError('wall opening must be an object');

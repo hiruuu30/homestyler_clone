@@ -5,7 +5,7 @@ export type Point = Readonly<{
 
 export type Units = 'm' | 'ft';
 
-export type ToolMode = 'select' | 'room' | 'polygon' | 'wall' | 'furniture';
+export type ToolMode = 'select' | 'room' | 'polygon' | 'hole' | 'wall' | 'furniture';
 
 export type Level = Readonly<{
   id: string;
@@ -18,6 +18,7 @@ export type Room = Readonly<{
   id: string;
   name: string;
   points: readonly Point[];
+  holes?: readonly (readonly Point[])[];
   floorMaterialId: string;
   ceilingVisible: boolean;
   levelId: string;

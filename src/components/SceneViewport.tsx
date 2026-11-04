@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { frameProjectCamera } from '../domain/camera';
 import { wallSolidSegments } from '../domain/wall-openings';
-import type { DesignProject, Point } from '../domain/types';
+import type { DesignProject, Point, Room } from '../domain/types';
 
 export type SceneViewportProps = {
   project: DesignProject;
@@ -15,14 +15,27 @@ function materialColor(project: DesignProject, id: string, fallback: string): st
   return project.materials.find((material) => material.id === id)?.color ?? fallback;
 }
 
-function polygonShape(points: readonly Point[]): THREE.Shape {
+function polygonShape(points: readonly Point[], holes: readonly (readonly Point[])[] = []): THREE.Shape {
   const shape = new THREE.Shape();
   points.forEach((point, index) => {
     if (index === 0) shape.moveTo(point.x, -point.y);
     else shape.lineTo(point.x, -point.y);
   });
   shape.closePath();
+  holes.forEach((vertices) => {
+    const hole = new THREE.Path();
+    vertices.forEach((point, index) => {
+      if (index === 0) hole.moveTo(point.x, -point.y);
+      else hole.lineTo(point.x, -point.y);
+    });
+    hole.closePath();
+    shape.holes.push(hole);
+  });
   return shape;
+}
+
+export function createRoomFloorGeometry(room: Pick<Room, 'points' | 'holes'>): THREE.ShapeGeometry {
+  return new THREE.ShapeGeometry(polygonShape(room.points, room.holes));
 }
 
 function addBox(
@@ -94,7 +107,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
     scene.add(floor);
 
     project.rooms.forEach((room) => {
-      const geometry = new THREE.ShapeGeometry(polygonShape(room.points));
+      const geometry = createRoomFloorGeometry(room);
       const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: materialColor(project, room.floorMaterialId, '#c9b8a0'), side: THREE.DoubleSide }));
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.y = floorElevation + 0.01;

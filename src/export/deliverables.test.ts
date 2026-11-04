@@ -1,6 +1,6 @@
 import { DOMParser } from '@xmldom/xmldom';
 import { describe, expect, it } from 'vitest';
-import { addFurniture, addLevel, addWallOpening, createStarterProject, normalizeProject } from '../domain/model';
+import { addFurniture, addLevel, addWallOpening, createPolygonRoomWithHoles, createStarterProject, normalizeProject } from '../domain/model';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './deliverables';
 
 const chair = {
@@ -63,9 +63,9 @@ describe('independent project deliverables', () => {
     expect(elements('svg')).toHaveLength(1);
     expect(elements('title')[0].textContent).toBe('Studio & <Loft> — Ground Floor floor plan');
     expect(elements('svg')[0].getAttribute('data-units')).toBe('m');
-    const room = elements('polygon').find((element) => element.getAttribute('id') === 'room-starter');
+    const room = elements('path').find((element) => element.getAttribute('id') === 'room-starter');
     expect(room?.getAttribute('data-area-m2')).toBe('5.2');
-    expect(room?.getAttribute('points')).toContain('4.2,-0.5');
+    expect(room?.getAttribute('d')).toContain('4.2,-0.5');
     expect(elements('line').find((element) => element.getAttribute('id') === 'wall-north')?.getAttribute('data-length-m')).toBe('2');
     expect(elements('g').find((element) => element.getAttribute('id') === 'opening-1')?.getAttribute('data-kind')).toBe('door');
     const chairElement = elements('rect').find((element) => element.getAttribute('id') === 'chair-quoted');
@@ -73,7 +73,7 @@ describe('independent project deliverables', () => {
     expect(chairElement?.getAttribute('fill')).toBe('#506070');
     expect(elements('title').some((element) => element.textContent === chair.name)).toBe(true);
     expect(elements('rect').some((element) => element.getAttribute('id') === 'hidden-chair')).toBe(false);
-    expect(elements('polygon').some((element) => element.getAttribute('id') === 'upper-room')).toBe(false);
+    expect(elements('path').some((element) => element.getAttribute('id') === 'upper-room')).toBe(false);
     expect(elements('text').some((element) => element.textContent === 'Living Room · 5.20 m²')).toBe(true);
     expect(svg).not.toContain('\u0000');
     expect(() => exportPlanSvg(project, 'missing-floor')).toThrow(/unknown level/);
@@ -115,6 +115,23 @@ describe('independent project deliverables', () => {
     expect(Array.from(svgWall).find((element) => element.getAttribute('id') === 'wall-north')?.getAttribute('data-length-m')).toBe('2');
     expect(room?.[5]).toBe('5.2');
     expect(wall?.[6]).toBe('2');
+  });
+
+  it('exports room holes as even-odd SVG cut-outs and subtracts them from net area', () => {
+    const base = createStarterProject();
+    const room = createPolygonRoomWithHoles('room-hole', 'Atrium', [
+      { x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 4 }, { x: 0, y: 4 },
+    ], [[
+      { x: 2, y: 1 }, { x: 3, y: 1 }, { x: 3, y: 2 }, { x: 2, y: 2 },
+    ]], base.materials.find((material) => material.category === 'floor')?.id, 'floor-ground');
+    const project = { ...base, rooms: [room] };
+    const svg = exportPlanSvg(project);
+    const element = new DOMParser().parseFromString(svg, 'image/svg+xml').getElementsByTagNameNS('http://www.w3.org/2000/svg', 'path')[0];
+    expect(element.getAttribute('id')).toBe('room-hole');
+    expect(element.getAttribute('fill-rule')).toBe('evenodd');
+    expect(element.getAttribute('d')?.match(/M /g)).toHaveLength(2);
+    expect(element.getAttribute('data-area-m2')).toBe('19');
+    expect(parseCsv(exportQuantitiesCsv(project)).find((row) => row[1] === 'room-hole')?.[5]).toBe('19');
   });
 
   it('fits rotated furniture into the SVG drawing bounds', () => {

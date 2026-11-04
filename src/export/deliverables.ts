@@ -46,25 +46,67 @@ function boundsFor(points: readonly Point[]): Bounds {
 }
 
 function roomCenter(room: Room): Point {
-  let areaTwice = 0;
-  let x = 0;
-  let y = 0;
-  for (let index = 0; index < room.points.length; index += 1) {
-    const current = room.points[index];
-    const next = room.points[(index + 1) % room.points.length];
-    const cross = current.x * next.y - next.x * current.y;
-    areaTwice += cross;
-    x += (current.x + next.x) * cross;
-    y += (current.y + next.y) * cross;
+  const centroid = (points: readonly Point[]) => {
+    let areaTwice = 0;
+    let x = 0;
+    let y = 0;
+    for (let index = 0; index < points.length; index += 1) {
+      const current = points[index];
+      const next = points[(index + 1) % points.length];
+      const cross = current.x * next.y - next.x * current.y;
+      areaTwice += cross;
+      x += (current.x + next.x) * cross;
+      y += (current.y + next.y) * cross;
+    }
+    if (Math.abs(areaTwice) < 1e-12) {
+      return { point: points.reduce((center, point) => ({ x: center.x + point.x / points.length, y: center.y + point.y / points.length }), { x: 0, y: 0 }), area: 0 };
+    }
+    return { point: { x: x / (3 * areaTwice), y: y / (3 * areaTwice) }, area: Math.abs(areaTwice) / 2 };
+  };
+  const outer = centroid(room.points);
+  const holes = (room.holes ?? []).map(centroid);
+  const remainingArea = outer.area - holes.reduce((sum, ring) => sum + ring.area, 0);
+  const weighted = remainingArea > 0 ? {
+    x: (outer.point.x * outer.area - holes.reduce((sum, ring) => sum + ring.point.x * ring.area, 0)) / remainingArea,
+    y: (outer.point.y * outer.area - holes.reduce((sum, ring) => sum + ring.point.y * ring.area, 0)) / remainingArea,
+  } : outer.point;
+  const inside = (value: Point, polygon: readonly Point[]) => {
+    let result = false;
+    for (let index = 0; index < polygon.length; index += 1) {
+      const a = polygon[index];
+      const b = polygon[(index + 1) % polygon.length];
+      if ((a.y > value.y) !== (b.y > value.y) && value.x < (b.x - a.x) * (value.y - a.y) / (b.y - a.y) + a.x) result = !result;
+    }
+    return result;
+  };
+  const inFloor = (value: Point) => inside(value, room.points) && !(room.holes ?? []).some((hole) => inside(value, hole));
+  if (inFloor(weighted)) return weighted;
+  const xs = room.points.map((point) => point.x);
+  const ys = room.points.map((point) => point.y);
+  let nearest: Point | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (let row = 1; row < 32; row += 1) {
+    for (let column = 1; column < 32; column += 1) {
+      const candidate = {
+        x: Math.min(...xs) + (Math.max(...xs) - Math.min(...xs)) * column / 32,
+        y: Math.min(...ys) + (Math.max(...ys) - Math.min(...ys)) * row / 32,
+      };
+      if (!inFloor(candidate)) continue;
+      const distance = Math.hypot(candidate.x - weighted.x, candidate.y - weighted.y);
+      if (distance < nearestDistance) { nearest = candidate; nearestDistance = distance; }
+    }
   }
-  if (Math.abs(areaTwice) < 1e-12) {
-    return room.points.reduce((center, point) => ({ x: center.x + point.x / room.points.length, y: center.y + point.y / room.points.length }), { x: 0, y: 0 });
-  }
-  return { x: x / (3 * areaTwice), y: y / (3 * areaTwice) };
+  return nearest ?? room.points[0];
 }
 
 function pointsText(points: readonly Point[]): string {
   return points.map((point) => `${number(point.x)},${number(point.y)}`).join(' ');
+}
+
+function roomPath(room: Room): string {
+  return [room.points, ...(room.holes ?? [])]
+    .map((points) => `M ${pointsText(points)} Z`)
+    .join(' ');
 }
 
 function materialColor(project: DesignProject, materialId: string, fallback: string): string {
@@ -97,6 +139,7 @@ function selectedFloor(project: DesignProject, levelId: string) {
   const rooms = project.rooms.filter((room) => room.levelId === levelId).map((room) => ({
     ...room,
     points: room.points.map(scalePoint),
+    ...(room.holes === undefined ? {} : { holes: room.holes.map((hole) => hole.map(scalePoint)) }),
   }));
   const walls = project.walls.filter((wall) => wall.levelId === levelId).map((wall) => ({
     ...wall,
@@ -144,7 +187,7 @@ export function exportPlanSvg(project: DesignProject, levelId = project.activeLe
   ];
   for (const room of rooms) {
     const fill = materialColor(project, room.floorMaterialId, '#eee9df');
-    parts.push(`<polygon id="${xml(room.id)}" data-kind="room" data-area-m2="${number(roomArea(room))}" points="${pointsText(room.points)}" fill="${fill}" fill-opacity="0.62"/>`);
+    parts.push(`<path id="${xml(room.id)}" data-kind="room" data-area-m2="${number(roomArea(room))}" d="${roomPath(room)}" fill="${fill}" fill-opacity="0.62" fill-rule="evenodd"/>`);
   }
   parts.push('</g>', '<g class="walls" fill="none" stroke="#50565e" stroke-linecap="square" stroke-linejoin="round">');
   for (const wall of walls) {

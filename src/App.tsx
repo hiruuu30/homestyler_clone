@@ -5,9 +5,9 @@ import {
   PenTool, Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
-  addFurniture, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
+  addFurniture, addRoomHole, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
-  removeLevel as removeProjectLevel, removePlanUnderlay, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening,
+  removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening,
   findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
@@ -157,6 +157,27 @@ export default function App() {
       setTool('select');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Could not create this room outline');
+    }
+  }
+  function createRoomHole(points: readonly Point[]) {
+    if (!selectedRoom) { notify('Select a room before drawing a floor opening'); setTool('select'); return; }
+    try {
+      commit(addRoomHole(project, selectedRoom.id, points));
+      setSelectedId(selectedRoom.id);
+      setTool('select');
+      notify('Floor opening added · Undo to restore');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not create this floor opening');
+    }
+  }
+  function deleteRoomHole(holeIndex: number) {
+    if (!selectedRoom) return;
+    try {
+      commit(removeRoomHole(project, selectedRoom.id, holeIndex));
+      setSelectedId(selectedRoom.id);
+      notify('Floor opening removed · Undo to restore');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not remove this floor opening');
     }
   }
   function createWall(start: Point, end: Point) {
@@ -580,9 +601,9 @@ export default function App() {
           {collapsed && <button className="expand-panel" onClick={() => setCollapsed(false)} aria-label="Show panel"><ChevronRight size={17} /></button>}
           <div className="viewport-area">
             {view === 'plan'
-              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} fitRequest={cameraFitRequest} />
+              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateRoomHole={createRoomHole} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} fitRequest={cameraFitRequest} />
               : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport key={cameraFitRequest} project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
-            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
+            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
           </div>
           <footer className="bottom-bar">
             <div className="canvas-tools"><button className={tool === 'select' ? 'chosen' : ''} title="Select" onClick={() => setTool('select')}><MousePointer2 size={16} /></button><button className={tool === 'room' ? 'chosen' : ''} title="Draw room" onClick={() => { setView('plan'); setTool('room'); }}><Square size={16} /></button><button className={tool === 'wall' ? 'chosen' : ''} title="Draw wall" onClick={() => { setView('plan'); setTool('wall'); }}><Grid2X2 size={16} /></button><button title="Add sofa" onClick={() => { setPanel('furniture'); addSofa(); }}><Sofa size={16} /></button></div>
@@ -605,7 +626,18 @@ export default function App() {
           /></div>
           <div className={`inspector-head${selectedWall ? ' wall-selected' : ''}`}>{!selectedWall && <small>PROPERTIES</small>}<h2>{selectedWall ? 'Layer settings' : selectedRoom?.name ?? selectedFurniture?.name ?? (selectedOpening ? `${selectedOpening.kind === 'door' ? 'Door' : 'Window'} opening` : 'Design summary')}</h2></div>
           {!selectedRoom && !selectedWall && !selectedFurniture && !selectedOpening && <div className="summary"><Building2 size={27} /><p>{activeLevel.name} · select a room, wall, furniture object or opening.</p><div><span>Rooms</span><b>{visibleProject.rooms.length}</b></div><div><span>Floor area</span><b>{area.toFixed(2)} {areaUnit}</b></div><div><span>Furniture</span><b>{visibleProject.furniture.length}</b></div></div>}
-          {selectedRoom && <div className="properties"><section><h3>Room settings</h3><label>Room name<input value={selectedRoom.name} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, name: event.target.value } : room) })} /></label><label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} ${areaUnit}`} /></label><label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label></section><section><h3>Room options</h3><label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label></section></div>}
+          {selectedRoom && <div className="properties">
+            <section><h3>Room settings</h3>
+              <label>Room name<input value={selectedRoom.name} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, name: event.target.value } : room) })} /></label>
+              <label>Floor area<input readOnly value={`${roomArea(selectedRoom).toFixed(2)} ${areaUnit}`} /></label>
+              <label>Floor finish<div className="current-material"><span style={{ background: selectedMaterial?.color }} />{selectedMaterial?.name ?? 'Default'}</div></label>
+            </section>
+            <section><h3>Room options</h3>
+              <label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label>
+              <button className="rotate-btn" title="Trace an interior floor void; Undo is available" onClick={() => { setView('plan'); setTool('hole'); }}>Draw floor opening</button>
+              {(selectedRoom.holes ?? []).map((_, index) => <button key={`${selectedRoom.id}-hole-${index}`} className="rotate-btn danger-action" title="Undo is available" onClick={() => deleteRoomHole(index)}>Remove floor opening {index + 1}</button>)}
+            </section>
+          </div>}
           {selectedWall && <div className="properties wall-properties">
             <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} {areaUnit}</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
             <section className="wall-settings-section"><h3>Wall settings</h3><div className="wall-fields">
@@ -694,17 +726,42 @@ function MapPreview({ project, view, onSet3d, onSet2d, onSelectRoom }: { project
   const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
   const fontSize = Math.min(bounds.width, bounds.height) * 0.0875;
   const pointsAttribute = (points: readonly Point[]) => points.map((point) => `${point.x},${point.y}`).join(' ');
+  const roomPath = (room: DesignProject['rooms'][number]) => [room.points, ...(room.holes ?? [])].map((points) => `M ${pointsAttribute(points)} Z`).join(' ');
   const center = (points: readonly Point[]): Point => points.reduce(
     (result, point) => ({ x: result.x + point.x / points.length, y: result.y + point.y / points.length }),
     { x: 0, y: 0 },
   );
+  const inside = (point: Point, polygon: readonly Point[]) => {
+    let result = false;
+    for (let index = 0; index < polygon.length; index += 1) {
+      const a = polygon[index];
+      const b = polygon[(index + 1) % polygon.length];
+      if ((a.y > point.y) !== (b.y > point.y) && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) result = !result;
+    }
+    return result;
+  };
+  const roomLabelCenter = (room: DesignProject['rooms'][number]) => {
+    const middle = center(room.points);
+    const holes = room.holes ?? [];
+    const isFloor = (candidate: Point) => inside(candidate, room.points) && !holes.some((hole) => inside(candidate, hole));
+    if (isFloor(middle)) return middle;
+    const xs = room.points.map((point) => point.x);
+    const ys = room.points.map((point) => point.y);
+    for (let step = 1; step < 32; step += 1) {
+      for (let column = 1; column < 32; column += 1) {
+        const candidate = { x: Math.min(...xs) + (Math.max(...xs) - Math.min(...xs)) * column / 32, y: Math.min(...ys) + (Math.max(...ys) - Math.min(...ys)) * step / 32 };
+        if (isFloor(candidate)) return candidate;
+      }
+    }
+    return room.points[0];
+  };
   return <div className="mini-map" role="group" aria-label="Floor plan overview">
     <svg className="map-preview" viewBox={viewBox} aria-hidden="true" preserveAspectRatio="xMidYMid meet">
       <rect className="map-background" x={bounds.minX} y={bounds.minY} width={bounds.width} height={bounds.height} />
-      {project.rooms.map((room) => <polygon key={room.id} className="map-room" points={pointsAttribute(room.points)} />)}
+      {project.rooms.map((room) => <path key={room.id} className="map-room" d={roomPath(room)} fillRule="evenodd" />)}
       {project.walls.map((wall) => <line key={wall.id} className="map-wall" x1={wall.start.x} y1={wall.start.y} x2={wall.end.x} y2={wall.end.y} strokeWidth={Math.max(0.05, wall.thickness * 0.55)} />)}
       {project.rooms.map((room) => {
-        const centroid = center(room.points);
+        const centroid = roomLabelCenter(room);
         const referenceOffset = room.name === 'Living Room' ? { x: 0.28 * unitsPerMetre, y: -0.11 * unitsPerMetre } : { x: 0, y: 0 };
         const label = { x: centroid.x + referenceOffset.x, y: centroid.y + referenceOffset.y };
         const referenceWidth = room.name === 'Lobby' ? 1.149 * unitsPerMetre : room.name === 'Living Room' ? 2.567 * unitsPerMetre : undefined;
