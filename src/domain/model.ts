@@ -127,6 +127,32 @@ function properSegmentIntersection(
   return { fraction, otherFraction };
 }
 
+type WallCrossingCut = Readonly<{ wallId: string; fraction: number }>;
+
+function splitWallsAtCrossings(project: DesignProject, cuts: readonly WallCrossingCut[]): DesignProject {
+  const fractionsByWall = new Map<string, number[]>();
+  cuts.forEach(({ wallId, fraction }) => {
+    const fractions = fractionsByWall.get(wallId) ?? [];
+    fractions.push(fraction);
+    fractionsByWall.set(wallId, fractions);
+  });
+
+  let next = project;
+  fractionsByWall.forEach((fractions, wallId) => {
+    const sorted = [...fractions].sort((left, right) => right - left);
+    const unique: number[] = [];
+    sorted.forEach((fraction) => {
+      if (!unique.some((existing) => Math.abs(existing - fraction) <= SEGMENT_PARAMETER_EPSILON)) unique.push(fraction);
+    });
+    let currentEndFraction = 1;
+    unique.forEach((fraction) => {
+      next = splitWall(next, wallId, fraction / currentEndFraction);
+      currentEndFraction = fraction;
+    });
+  });
+  return next;
+}
+
 function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
   const epsilon = 1e-9;
   const abC = cross(a, b, c);
@@ -367,21 +393,14 @@ export function addWall(project: DesignProject, input: Wall): DesignProject {
   const crossings = project.walls.flatMap((candidate) => {
     if (candidate.levelId !== wall.levelId) return [];
     const intersection = properSegmentIntersection(wall.start, wall.end, candidate.start, candidate.end);
-    return intersection ? [{ wallId: candidate.id, ...intersection }] : [];
+    return intersection ? [{ hostWallId: candidate.id, hostFraction: intersection.otherFraction, wallFraction: intersection.fraction }] : [];
   });
   let next = copyProject(project, { walls: [...project.walls, wall] });
-  for (const crossing of crossings) {
-    next = splitWall(next, crossing.wallId, crossing.otherFraction);
-  }
-  const cutFractions = crossings
-    .map((crossing) => crossing.fraction)
-    .sort((left, right) => right - left)
-    .filter((fraction, index, values) => index === 0 || Math.abs(fraction - values[index - 1]) > SEGMENT_PARAMETER_EPSILON);
-  let currentEndFraction = 1;
-  for (const fraction of cutFractions) {
-    next = splitWall(next, wall.id, fraction / currentEndFraction);
-    currentEndFraction = fraction;
-  }
+  const crossingCuts = [
+    ...crossings.map(({ hostWallId, hostFraction }) => ({ wallId: hostWallId, fraction: hostFraction })),
+    ...crossings.map(({ wallFraction }) => ({ wallId: wall.id, fraction: wallFraction })),
+  ];
+  next = splitWallsAtCrossings(next, crossingCuts);
   for (const endpoint of [wall.start, wall.end]) {
     while (true) {
       const host = next.walls.find((candidate) => candidate.id !== wall.id
@@ -746,11 +765,13 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
     movedTargets.push({ levelId: wall.levelId, point: end });
   }
   if (movedNodes.size === 0) return project;
+  const changedWallIds = new Set<string>();
   const walls: Wall[] = project.walls.map((item) => {
     const nextStart = movedNodes.get(nodeKey(item.levelId, item.start)) ?? item.start;
     const nextEnd = movedNodes.get(nodeKey(item.levelId, item.end)) ?? item.end;
     if (samePoint(nextStart, item.start) && samePoint(nextEnd, item.end)) return item;
     if (nextStart.x === nextEnd.x && nextStart.y === nextEnd.y) throw new RangeError(`endpoint edit would collapse wall: ${item.id}`);
+    changedWallIds.add(item.id);
     const updated = freeze({ ...item, start: point(nextStart, 'wall start'), end: point(nextEnd, 'wall end') });
     project.wallOpenings.filter((opening) => opening.wallId === item.id).forEach((opening) => validateOpening(updated, opening));
     return updated;
@@ -812,7 +833,23 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
     const validated = createPolygonRoom(room.id, room.name, expanded, room.floorMaterialId, room.levelId, project.units);
     return freeze({ ...room, points: validated.points });
   });
-  return copyProject(project, { walls, wallOpenings, rooms });
+  let next = copyProject(project, { walls, wallOpenings, rooms });
+  const crossingCuts: WallCrossingCut[] = [];
+  for (let first = 0; first < walls.length; first += 1) {
+    for (let second = first + 1; second < walls.length; second += 1) {
+      const left = walls[first];
+      const right = walls[second];
+      if ((!changedWallIds.has(left.id) && !changedWallIds.has(right.id)) || left.levelId !== right.levelId) continue;
+      const intersection = properSegmentIntersection(left.start, left.end, right.start, right.end);
+      if (!intersection) continue;
+      crossingCuts.push(
+        { wallId: left.id, fraction: intersection.fraction },
+        { wallId: right.id, fraction: intersection.otherFraction },
+      );
+    }
+  }
+  next = splitWallsAtCrossings(next, crossingCuts);
+  return next;
 }
 
 export function setFurnitureHidden(project: DesignProject, furnitureId: string, hidden: boolean): DesignProject {

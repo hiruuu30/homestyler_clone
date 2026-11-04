@@ -234,6 +234,27 @@ describe('domain model', () => {
     expect(Object.isFrozen(wall.start)).toBe(true);
   });
 
+  it('normalizes X crossings created by endpoint edits and rejects opening cuts atomically', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const branch = createWall('branch', { x: 1, y: -2 }, { x: 3, y: -1 });
+    const project = { ...base, walls: [host, branch], rooms: [] };
+    const moved = updateWallEndpoints(project, 'branch', { end: { x: 3, y: 2 } });
+
+    expect(moved.walls).toHaveLength(4);
+    expect(moved.walls.find((wall) => wall.id === 'host')).toMatchObject({ start: { x: 0, y: 0 }, end: { x: 2, y: 0 } });
+    expect(moved.walls.find((wall) => wall.id === 'wall-1')).toMatchObject({ start: { x: 2, y: 0 }, end: { x: 4, y: 0 } });
+    expect(moved.walls.find((wall) => wall.id === 'branch')).toMatchObject({ start: { x: 1, y: -2 }, end: { x: 2, y: 0 } });
+    expect(moved.walls.find((wall) => wall.id === 'wall-2')).toMatchObject({ start: { x: 2, y: 0 }, end: { x: 3, y: 2 } });
+    expect(project.walls[1].end).toEqual({ x: 3, y: -1 });
+
+    const withOpening = addWallOpening(project, 'host', 'window');
+    expect(() => updateWallEndpoints(withOpening, 'branch', { end: { x: 3, y: 2 } }))
+      .toThrow(/cannot split a wall through an opening/);
+    expect(withOpening.walls).toHaveLength(2);
+    expect(withOpening.wallOpenings[0].wallId).toBe('host');
+  });
+
   it('moves a shared endpoint across same-floor walls and room outlines but not another floor', () => {
     const project = createStarterProject();
     const upper = addLevel(project, 'Upper Floor');
