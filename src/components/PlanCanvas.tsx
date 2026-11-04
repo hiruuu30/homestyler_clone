@@ -14,6 +14,7 @@ export type PlanCanvasProps = {
   onCreateRoomHole: (points: readonly Point[]) => void;
   onCreateWall: (start: Point, end: Point) => void;
   onMoveFurniture: (id: string, position: Point) => void;
+  onMoveOpening: (id: string, center: number) => void;
   fitRequest: number;
 };
 
@@ -22,6 +23,7 @@ type CameraBox = { minX: number; minY: number; width: number; height: number };
 type DragState =
   | { mode: 'create'; start: Point; current: Point }
   | { mode: 'move'; start: Point; current: Point; furnitureId: string; origin: Point }
+  | { mode: 'move-opening'; start: Point; current: Point; openingId: string; originCenter: number; width: number; wallStart: Point; wallEnd: Point }
   | { mode: 'pan'; pointerStart: Point; origin: CameraBox };
 
 const GRID_SIZE = 1;
@@ -62,7 +64,15 @@ function distance(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, onCreatePolygonRoom, onCreateRoomHole, onCreateWall, onMoveFurniture, fitRequest }: PlanCanvasProps) {
+function draggedOpeningCenter(drag: Extract<DragState, { mode: 'move-opening' }>, point: Point): number {
+  const dx = drag.wallEnd.x - drag.wallStart.x;
+  const dy = drag.wallEnd.y - drag.wallStart.y;
+  const length = Math.hypot(dx, dy);
+  const projectedDelta = ((point.x - drag.start.x) * dx + (point.y - drag.start.y) * dy) / length;
+  return Math.max(drag.width / 2, Math.min(length - drag.width / 2, drag.originCenter + projectedDelta));
+}
+
+export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, onCreatePolygonRoom, onCreateRoomHole, onCreateWall, onMoveFurniture, onMoveOpening, fitRequest }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [polygonPoints, setPolygonPoints] = useState<Point[]>([]);
@@ -117,6 +127,26 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
     if (!start) return;
     capture(event);
     setDrag({ mode: 'move', start, current: start, furnitureId: item.id, origin: item.position });
+  };
+
+  const beginOpeningDrag = (event: ReactPointerEvent<SVGGElement>, opening: DesignProject['wallOpenings'][number], wall: DesignProject['walls'][number]) => {
+    if (polygonTool) return;
+    event.stopPropagation();
+    onSelect(opening.id);
+    if (tool !== 'select') return;
+    const start = modelPoint(event.clientX, event.clientY);
+    if (!start) return;
+    capture(event);
+    setDrag({
+      mode: 'move-opening',
+      start,
+      current: start,
+      openingId: opening.id,
+      originCenter: opening.center,
+      width: opening.width,
+      wallStart: wall.start,
+      wallEnd: wall.end,
+    });
   };
 
   const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -197,11 +227,16 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
         if (tool === 'room') onCreateRoom(drag.start, end);
         if (tool === 'wall') onCreateWall(drag.start, end);
       }
-    } else if (distance(end, drag.start) > 0.05 * unitsPerMetre) {
-      onMoveFurniture(drag.furnitureId, {
-        x: drag.origin.x + end.x - drag.start.x,
-        y: drag.origin.y + end.y - drag.start.y,
-      });
+    } else if (drag.mode === 'move') {
+      if (distance(end, drag.start) > 0.05 * unitsPerMetre) {
+        onMoveFurniture(drag.furnitureId, {
+          x: drag.origin.x + end.x - drag.start.x,
+          y: drag.origin.y + end.y - drag.start.y,
+        });
+      }
+    } else if (drag.mode === 'move-opening') {
+      const center = draggedOpeningCenter(drag, end);
+      if (Math.abs(center - drag.originCenter) > 0.05 * unitsPerMetre) onMoveOpening(drag.openingId, center);
     }
     setDrag(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
@@ -328,8 +363,10 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
         const dx = wall.end.x - wall.start.x;
         const dy = wall.end.y - wall.start.y;
         const length = Math.hypot(dx, dy);
-        const centerX = wall.start.x + (dx / length) * opening.center;
-        const centerY = wall.start.y + (dy / length) * opening.center;
+        const openingDrag = drag?.mode === 'move-opening' && drag.openingId === opening.id ? drag : null;
+        const center = openingDrag ? draggedOpeningCenter(openingDrag, openingDrag.current) : opening.center;
+        const centerX = wall.start.x + (dx / length) * center;
+        const centerY = wall.start.y + (dy / length) * center;
         const angle = Math.atan2(dy, dx) * 180 / Math.PI;
         const half = opening.width / 2;
         const selected = selectedId === opening.id;
@@ -338,9 +375,10 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
             key={opening.id}
             className={`plan-opening plan-opening-${opening.kind}${selected ? ' is-selected' : ''}`}
             transform={`translate(${centerX} ${centerY}) rotate(${angle})`}
+            data-opening-id={opening.id}
             role="button"
-            aria-label={`${opening.kind} opening, ${opening.width.toFixed(2)} ${project.units} wide`}
-            onPointerDown={(event) => { if (polygonTool) return; event.stopPropagation(); onSelect(opening.id); }}
+            aria-label={`${opening.kind} opening, ${opening.width.toFixed(2)} ${project.units} wide; drag to move along wall`}
+            onPointerDown={(event) => beginOpeningDrag(event, opening, wall)}
           >
             <rect x={-half} y={-wall.thickness / 2 - 0.025} width={opening.width} height={wall.thickness + 0.05} fill="#fff" />
             {opening.kind === 'window'

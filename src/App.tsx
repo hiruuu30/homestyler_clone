@@ -290,6 +290,15 @@ export default function App() {
     try { commit(updateWallOpening(project, selectedOpening.id, changes)); }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not update this opening'); }
   }
+  function moveOpening(openingId: string, center: number) {
+    try {
+      commit(updateWallOpening(project, openingId, { center }));
+      setSelectedId(openingId);
+      notify('Opening moved · Undo to restore');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not move this opening');
+    }
+  }
   function applyMaterial(materialId: string) {
     if (selectedWall) {
       try { commit(assignWallMaterial(project, selectedWall.id, materialId)); }
@@ -632,9 +641,9 @@ export default function App() {
           {collapsed && <button className="expand-panel" onClick={() => setCollapsed(false)} aria-label="Show panel"><ChevronRight size={17} /></button>}
           <div className="viewport-area">
             {view === 'plan'
-              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateRoomHole={createRoomHole} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} fitRequest={cameraFitRequest} />
+              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateRoomHole={createRoomHole} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} onMoveOpening={moveOpening} fitRequest={cameraFitRequest} />
               : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport key={cameraFitRequest} project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
-            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
+            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · drag doors and windows along their walls · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
           </div>
           <footer className="bottom-bar">
             <div className="canvas-tools"><button className={tool === 'select' ? 'chosen' : ''} title="Select" onClick={() => setTool('select')}><MousePointer2 size={16} /></button><button className={tool === 'room' ? 'chosen' : ''} title="Draw room" onClick={() => { setView('plan'); setTool('room'); }}><Square size={16} /></button><button className={tool === 'wall' ? 'chosen' : ''} title="Draw wall" onClick={() => { setView('plan'); setTool('wall'); }}><Grid2X2 size={16} /></button><button title="Add sofa" onClick={() => { setPanel('furniture'); addSofa(); }}><Sofa size={16} /></button></div>
