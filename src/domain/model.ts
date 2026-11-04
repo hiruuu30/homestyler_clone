@@ -52,6 +52,54 @@ function positive(value: number, label: string): number {
   return value;
 }
 
+function signedPolygonArea(points: readonly Point[]): number {
+  let sum = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    sum += current.x * next.y - next.x * current.y;
+  }
+  return sum / 2;
+}
+
+function cross(a: Point, b: Point, c: Point): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+function pointOnSegment(pointValue: Point, start: Point, end: Point, epsilon: number): boolean {
+  return pointValue.x >= Math.min(start.x, end.x) - epsilon
+    && pointValue.x <= Math.max(start.x, end.x) + epsilon
+    && pointValue.y >= Math.min(start.y, end.y) - epsilon
+    && pointValue.y <= Math.max(start.y, end.y) + epsilon;
+}
+
+function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
+  const epsilon = 1e-9;
+  const abC = cross(a, b, c);
+  const abD = cross(a, b, d);
+  const cdA = cross(c, d, a);
+  const cdB = cross(c, d, b);
+  const crossesAb = (abC > epsilon && abD < -epsilon) || (abC < -epsilon && abD > epsilon);
+  const crossesCd = (cdA > epsilon && cdB < -epsilon) || (cdA < -epsilon && cdB > epsilon);
+  if (crossesAb && crossesCd) return true;
+  return (Math.abs(abC) <= epsilon && pointOnSegment(c, a, b, epsilon))
+    || (Math.abs(abD) <= epsilon && pointOnSegment(d, a, b, epsilon))
+    || (Math.abs(cdA) <= epsilon && pointOnSegment(a, c, d, epsilon))
+    || (Math.abs(cdB) <= epsilon && pointOnSegment(b, c, d, epsilon));
+}
+
+function hasSelfIntersection(points: readonly Point[]): boolean {
+  for (let first = 0; first < points.length; first += 1) {
+    const firstNext = (first + 1) % points.length;
+    for (let second = first + 1; second < points.length; second += 1) {
+      const secondNext = (second + 1) % points.length;
+      if (second === firstNext || (first === 0 && secondNext === 0)) continue;
+      if (segmentsIntersect(points[first], points[firstNext], points[second], points[secondNext])) return true;
+    }
+  }
+  return false;
+}
+
 function validateOpening(wall: Wall, opening: Pick<WallOpening, 'center' | 'width' | 'height' | 'sillHeight'>): void {
   const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
   if (!Number.isFinite(opening.center)) throw new TypeError('opening center must be a finite number');
@@ -150,23 +198,51 @@ export function createRectRoom(
   origin: Point = { x: 0, y: 0 },
   floorMaterialId = DEFAULT_MATERIAL_ID,
   levelId = DEFAULT_LEVEL_ID,
+  units: Units = 'm',
+): Room {
+  positive(width, 'room width');
+  positive(depth, 'room depth');
+  const start = point(origin, 'room origin');
+  return createPolygonRoom(roomId, name, [
+    start,
+    { x: start.x + width, y: start.y },
+    { x: start.x + width, y: start.y + depth },
+    { x: start.x, y: start.y + depth },
+  ], floorMaterialId, levelId, units);
+}
+
+/** Create a simple room outline; self-intersections and degenerate edges are rejected. */
+export function createPolygonRoom(
+  roomId: string,
+  name: string,
+  vertices: readonly Point[],
+  floorMaterialId = DEFAULT_MATERIAL_ID,
+  levelId = DEFAULT_LEVEL_ID,
+  units: Units = 'm',
 ): Room {
   id(roomId, 'room id');
   id(name, 'room name');
-  positive(width, 'room width');
-  positive(depth, 'room depth');
   id(floorMaterialId, 'floorMaterialId');
   id(levelId, 'levelId');
-  const start = point(origin, 'room origin');
+  const scale = unitScale('m', units);
+  const points = vertices.map((vertex, index) => point(vertex, `room point ${index + 1}`));
+  if (points.length > 1 && points[0].x === points.at(-1)!.x && points[0].y === points.at(-1)!.y) points.pop();
+  if (points.length < 3) throw new RangeError('a room needs at least three distinct vertices');
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    if (Math.hypot(next.x - current.x, next.y - current.y) <= 1e-9) {
+      throw new RangeError('room edges must have non-zero length');
+    }
+  }
+  if (hasSelfIntersection(points)) throw new RangeError('room outline cannot self-intersect');
+  if (Math.abs(signedPolygonArea(points)) < 0.01 * scale * scale) {
+    throw new RangeError('room area must be at least 0.01 square metres');
+  }
   return freeze({
     id: roomId,
     name,
-    points: freeze([
-      start,
-      point({ x: start.x + width, y: start.y }, 'room point'),
-      point({ x: start.x + width, y: start.y + depth }, 'room point'),
-      point({ x: start.x, y: start.y + depth }, 'room point'),
-    ]),
+    points: freeze(points),
     floorMaterialId,
     ceilingVisible: true,
     levelId,

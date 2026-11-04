@@ -5,7 +5,7 @@ export type Point = Readonly<{
 
 export type Units = 'm' | 'ft';
 
-export type ToolMode = 'select' | 'room' | 'wall' | 'furniture';
+export type ToolMode = 'select' | 'room' | 'polygon' | 'wall' | 'furniture';
 
 export type Level = Readonly<{
   id: string;

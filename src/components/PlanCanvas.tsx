@@ -9,6 +9,7 @@ export type PlanCanvasProps = {
   selectedId?: string | null;
   onSelect: (id: string | null) => void;
   onCreateRoom: (start: Point, end: Point) => void;
+  onCreatePolygonRoom: (points: readonly Point[]) => void;
   onCreateWall: (start: Point, end: Point) => void;
   onMoveFurniture: (id: string, position: Point) => void;
   fitRequest: number;
@@ -52,9 +53,11 @@ function distance(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, onCreateWall, onMoveFurniture, fitRequest }: PlanCanvasProps) {
+export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, onCreatePolygonRoom, onCreateWall, onMoveFurniture, fitRequest }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [polygonPoints, setPolygonPoints] = useState<Point[]>([]);
+  const [polygonCursor, setPolygonCursor] = useState<Point | null>(null);
   const [cameraBox, setCameraBox] = useState<CameraBox | null>(null);
   const bounds = projectBounds(project);
   const visibleBox = cameraBox ?? bounds;
@@ -63,6 +66,12 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   const gridSize = GRID_SIZE * unitsPerMetre;
 
   useEffect(() => setCameraBox(null), [fitRequest]);
+  useEffect(() => {
+    if (tool !== 'polygon') {
+      setPolygonPoints([]);
+      setPolygonCursor(null);
+    }
+  }, [tool]);
 
   const snapDistance = () => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -87,6 +96,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   };
 
   const beginFurnitureDrag = (event: ReactPointerEvent<SVGGElement>, item: FurnitureInstance) => {
+    if (tool === 'polygon') return;
     event.stopPropagation();
     onSelect(item.id);
     if (tool !== 'select') return;
@@ -101,6 +111,25 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       event.preventDefault();
       capture(event);
       setDrag({ mode: 'pan', pointerStart: { x: event.clientX, y: event.clientY }, origin: visibleBox });
+      return;
+    }
+    if (tool === 'polygon') {
+      event.preventDefault();
+      event.currentTarget.focus();
+      const rawPoint = modelPoint(event.clientX, event.clientY);
+      if (!rawPoint) return;
+      const nextPoint = snapPoint(rawPoint);
+      setPolygonCursor(nextPoint);
+      if (polygonPoints.length >= 3 && distance(nextPoint, polygonPoints[0]) <= snapDistance()) {
+        onCreatePolygonRoom(polygonPoints);
+        setPolygonPoints([]);
+        setPolygonCursor(null);
+        return;
+      }
+      const lastPoint = polygonPoints.at(-1);
+      if (!lastPoint || distance(lastPoint, nextPoint) > 0.05 * unitsPerMetre) {
+        setPolygonPoints((items) => [...items, nextPoint]);
+      }
       return;
     }
     const backgroundTarget = event.target === event.currentTarget
@@ -118,6 +147,10 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   };
 
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (tool === 'polygon') {
+      const point = modelPoint(event.clientX, event.clientY);
+      if (point) setPolygonCursor(snapPoint(point));
+    }
     if (!drag) return;
     if (drag.mode === 'pan') {
       const rect = svgRef.current?.getBoundingClientRect();
@@ -178,6 +211,9 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   const previewPoints = drag?.mode === 'create' && tool === 'room'
     ? `${drag.start.x},${drag.start.y} ${drag.current.x},${drag.start.y} ${drag.current.x},${drag.current.y} ${drag.start.x},${drag.current.y}`
     : undefined;
+  const polygonPreview = polygonCursor && polygonPoints.length
+    ? [...polygonPoints, polygonPoints.length >= 3 && distance(polygonCursor, polygonPoints[0]) <= snapDistance() ? polygonPoints[0] : polygonCursor]
+    : polygonPoints;
 
   return (
     <svg
@@ -186,11 +222,25 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       viewBox={viewBox}
       role="img"
       aria-label="2D floor plan"
+      tabIndex={tool === 'polygon' ? 0 : undefined}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={finishDrag}
       onPointerCancel={cancelDrag}
       onWheel={handleWheel}
+      onKeyDown={(event) => {
+        if (tool !== 'polygon') return;
+        if (event.key === 'Enter' && polygonPoints.length >= 3) {
+          event.preventDefault();
+          onCreatePolygonRoom(polygonPoints);
+          setPolygonPoints([]);
+          setPolygonCursor(null);
+        } else if (event.key === 'Escape') {
+          event.preventDefault();
+          setPolygonPoints([]);
+          setPolygonCursor(null);
+        }
+      }}
       onContextMenu={(event) => event.preventDefault()}
     >
       <defs>
@@ -204,7 +254,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
           key={room.id}
           className={`plan-room${selectedId === room.id ? ' is-selected' : ''}`}
           points={pointsAttribute(room.points)}
-          onPointerDown={(event) => { event.stopPropagation(); onSelect(room.id); }}
+          onPointerDown={(event) => { if (tool === 'polygon') return; event.stopPropagation(); onSelect(room.id); }}
         />
       ))}
       {project.walls.map((wall) => (
@@ -216,7 +266,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
           x2={wall.end.x}
           y2={wall.end.y}
           strokeWidth={wall.thickness}
-          onPointerDown={(event) => { event.stopPropagation(); onSelect(wall.id); }}
+          onPointerDown={(event) => { if (tool === 'polygon') return; event.stopPropagation(); onSelect(wall.id); }}
         />
       ))}
       {project.wallOpenings.map((opening) => {
@@ -237,7 +287,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
             transform={`translate(${centerX} ${centerY}) rotate(${angle})`}
             role="button"
             aria-label={`${opening.kind} opening, ${opening.width.toFixed(2)} ${project.units} wide`}
-            onPointerDown={(event) => { event.stopPropagation(); onSelect(opening.id); }}
+            onPointerDown={(event) => { if (tool === 'polygon') return; event.stopPropagation(); onSelect(opening.id); }}
           >
             <rect x={-half} y={-wall.thickness / 2 - 0.025} width={opening.width} height={wall.thickness + 0.05} fill="#fff" />
             {opening.kind === 'window'
@@ -266,6 +316,8 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
         );
       })}
       {previewPoints && <polygon className="plan-preview" points={previewPoints} />}
+      {polygonPreview.length > 1 && <polyline className="plan-polygon-preview" points={pointsAttribute(polygonPreview)} />}
+      {polygonPoints.map((point, index) => <circle key={`polygon-point-${index}`} className="plan-polygon-vertex" cx={point.x} cy={point.y} r={0.07 * unitsPerMetre} />)}
       {drag?.mode === 'create' && tool === 'wall' && <line className="plan-preview" x1={drag.start.x} y1={drag.start.y} x2={drag.current.x} y2={drag.current.y} />}
     </svg>
   );

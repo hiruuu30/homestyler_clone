@@ -6,6 +6,7 @@ import {
   arrayFurniture,
   assignRoomMaterial,
   createRectRoom,
+  createPolygonRoom,
   createStarterProject,
   createWall,
   convertProjectUnits,
@@ -57,6 +58,39 @@ describe('domain model', () => {
     ];
     expect(walls).toHaveLength(4);
     expect(walls.every((wall) => wall.thickness > 0)).toBe(true);
+  });
+
+  it('creates a concave polygon room and removes a repeated closing vertex', () => {
+    const vertices = [
+      { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 1.5 },
+      { x: 2, y: 1.5 }, { x: 2, y: 3 }, { x: 0, y: 3 }, { x: 0, y: 0 },
+    ];
+    const room = createPolygonRoom('room-l', 'L-shaped room', vertices);
+
+    expect(room.points).toHaveLength(6);
+    expect(roomArea(room)).toBe(9);
+    expect(Object.isFrozen(room.points)).toBe(true);
+    expect(Object.isFrozen(room.points[0])).toBe(true);
+  });
+
+  it('rejects self-intersections, zero-length edges, and areas below the minimum', () => {
+    expect(() => createPolygonRoom('crossing', 'Crossing', [
+      { x: 0, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }, { x: 2, y: 0 },
+    ])).toThrow(/self-intersect/);
+    expect(() => createPolygonRoom('duplicate', 'Duplicate', [
+      { x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 2 },
+    ])).toThrow(/non-zero length/);
+    expect(() => createPolygonRoom('tiny', 'Tiny', [
+      { x: 0, y: 0 }, { x: 0.05, y: 0 }, { x: 0, y: 0.05 },
+    ])).toThrow(/at least 0.01/);
+  });
+
+  it('validates and stores imperial polygon geometry without changing its coordinates', () => {
+    const room = createPolygonRoom('room-ft', 'Feet room', [
+      { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 },
+    ], undefined, undefined, 'ft');
+    expect(room.points[2]).toEqual({ x: 4, y: 3 });
+    expect(roomArea(room)).toBe(12);
   });
 
   it('calculates rectangle area', () => {

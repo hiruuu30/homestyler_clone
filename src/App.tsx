@@ -2,10 +2,10 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Building2, Check, ChevronDown, ChevronRight, CircleHelp, Copy, Download,
   Eye, EyeOff, FilePlus2, Grid2X2, Layers3, Maximize2, MousePointer2, PaintBucket, PanelLeftClose,
-  Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
+  PenTool, Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
-  addFurniture, addWallOpening, arrayFurniture, assignRoomMaterial, createRectRoom, createStarterProject, duplicateFurniture,
+  addFurniture, addWallOpening, arrayFurniture, assignRoomMaterial, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updateWallOpening,
   updateWallEndpoints, updateWallHeight, updateWallThickness,
@@ -127,7 +127,7 @@ export default function App() {
     if (distance(start, end) * metresPerProjectUnit < 0.35) { notify('Draw a larger room'); return; }
     const minX = Math.min(start.x, end.x);
     const minY = Math.min(start.y, end.y);
-    const room = createRectRoom(nextEntityId(project.rooms, 'room'), `Room ${project.rooms.length + 1}`, Math.abs(end.x - start.x), Math.abs(end.y - start.y), { x: minX, y: minY }, project.materials[0]?.id, activeLevelId);
+    const room = createRectRoom(nextEntityId(project.rooms, 'room'), `Room ${project.rooms.length + 1}`, Math.abs(end.x - start.x), Math.abs(end.y - start.y), { x: minX, y: minY }, project.materials[0]?.id, activeLevelId, project.units);
     const existingWalls = [...project.walls];
     const walls = room.points.map((point, index) => {
       const wall = makeWall(nextEntityId(existingWalls, 'wall'), point, room.points[(index + 1) % room.points.length], undefined, undefined, undefined, activeLevelId, project.units);
@@ -138,6 +138,22 @@ export default function App() {
     commit(next);
     setSelectedId(room.id);
     setTool('select');
+  }
+  function createFreeformRoom(points: readonly Point[]) {
+    try {
+      const room = makePolygonRoom(nextEntityId(project.rooms, 'room'), `Room ${project.rooms.length + 1}`, points, project.materials[0]?.id, activeLevelId, project.units);
+      const existingWalls = [...project.walls];
+      const walls = room.points.map((point, index) => {
+        const wall = makeWall(nextEntityId(existingWalls, 'wall'), point, room.points[(index + 1) % room.points.length], undefined, undefined, undefined, activeLevelId, project.units);
+        existingWalls.push(wall);
+        return wall;
+      });
+      commit({ ...project, rooms: [...project.rooms, room], walls: [...project.walls, ...walls] });
+      setSelectedId(room.id);
+      setTool('select');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not create this room outline');
+    }
   }
   function createWall(start: Point, end: Point) {
     if (distance(start, end) * metresPerProjectUnit < 0.05) { notify('Draw a longer wall segment'); return; }
@@ -365,7 +381,8 @@ export default function App() {
             <span className="section-label build-section build-section-first">Draw walls</span>
             <div className="build-reference-grid build-wall-tools">
               <button className={`build-reference-tool${tool === 'wall' ? ' active' : ''}`} onClick={() => { setView('plan'); setTool('wall'); }}><span><Grid2X2 size={27} /></span><div>Draw straight walls</div></button>
-              <button className={`build-reference-tool${tool === 'room' ? ' active' : ''}`} onClick={() => { setView('plan'); setTool('room'); }}><span><Square size={27} /></span><div>Draw rooms</div></button>
+              <button className={`build-reference-tool${tool === 'room' ? ' active' : ''}`} onClick={() => { setView('plan'); setTool('room'); }}><span><Square size={27} /></span><div>Draw rectangular room</div></button>
+              <button className={`build-reference-tool${tool === 'polygon' ? ' active' : ''}`} onClick={() => { setView('plan'); setTool('polygon'); }}><span><PenTool size={27} /></span><div>Draw custom room</div></button>
               <button className="build-reference-tool" disabled title="Outside area is not implemented"><span><Maximize2 size={27} /></span><span className="build-reference-label">Outside area</span></button>
             </div>
             <span className="section-label build-section">Door and window</span>
@@ -423,9 +440,9 @@ export default function App() {
           {collapsed && <button className="expand-panel" onClick={() => setCollapsed(false)} aria-label="Show panel"><ChevronRight size={17} /></button>}
           <div className="viewport-area">
             {view === 'plan'
-              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} fitRequest={cameraFitRequest} />
+              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} fitRequest={cameraFitRequest} />
               : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport key={cameraFitRequest} project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
-            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
+            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
           </div>
           <footer className="bottom-bar">
             <div className="canvas-tools"><button className={tool === 'select' ? 'chosen' : ''} title="Select" onClick={() => setTool('select')}><MousePointer2 size={16} /></button><button className={tool === 'room' ? 'chosen' : ''} title="Draw room" onClick={() => { setView('plan'); setTool('room'); }}><Square size={16} /></button><button className={tool === 'wall' ? 'chosen' : ''} title="Draw wall" onClick={() => { setView('plan'); setTool('wall'); }}><Grid2X2 size={16} /></button><button title="Add sofa" onClick={() => { setPanel('furniture'); addSofa(); }}><Sofa size={16} /></button></div>

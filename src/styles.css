@@ -206,3 +206,5 @@
 
 .unit-setting{margin:10px 0 4px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e5e7e9;border-radius:6px;color:#626a73;font-size:10px}
 .unit-setting select{max-width:135px;height:29px;padding:0 7px;border:1px solid #dfe2e5;border-radius:4px;background:#fff;color:#343940;font-size:9px}
+
+.plan-polygon-preview{fill:none;stroke:#2469d2;stroke-width:.045;stroke-dasharray:.14 .08;stroke-linejoin:round;pointer-events:none}.plan-polygon-vertex{fill:#fff;stroke:#2469d2;stroke-width:.04;pointer-events:none}
