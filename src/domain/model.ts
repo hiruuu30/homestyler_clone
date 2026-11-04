@@ -4,6 +4,7 @@ import type {
   FurnitureInstance,
   Level,
   Material,
+  PlanUnderlay,
   Point,
   Room,
   Units,
@@ -16,6 +17,7 @@ const DEFAULT_WALL_THICKNESS = 0.12;
 const DEFAULT_WALL_HEIGHT = 2.4;
 const DEFAULT_MATERIAL_ID = 'material-neutral-floor';
 const DEFAULT_LEVEL_ID = 'floor-ground';
+const MAX_UNDERLAY_SOURCE_LENGTH = 1_500_000;
 
 function unitScale(from: Units, to: Units): number {
   if ((from !== 'm' && from !== 'ft') || (to !== 'm' && to !== 'ft')) throw new TypeError('units must be m or ft');
@@ -137,6 +139,28 @@ function copyMaterial(material: Material): Material {
   return freeze({ ...material });
 }
 
+function validateUnderlay(underlay: PlanUnderlay): void {
+  id(underlay.id, 'underlay id');
+  id(underlay.name, 'underlay name');
+  id(underlay.levelId, 'underlay levelId');
+  if (underlay.name.length > 120) throw new RangeError('underlay name must be 120 characters or fewer');
+  if (!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(underlay.src)) {
+    throw new TypeError('underlay source must be a supported embedded image');
+  }
+  if (underlay.src.length > MAX_UNDERLAY_SOURCE_LENGTH) throw new RangeError('underlay image is too large for local project storage');
+  if (!Number.isFinite(underlay.x) || !Number.isFinite(underlay.y)) throw new TypeError('underlay position must be finite');
+  positive(underlay.width, 'underlay width');
+  positive(underlay.height, 'underlay height');
+  positive(underlay.aspectRatio, 'underlay aspect ratio');
+  const expectedHeight = underlay.width / underlay.aspectRatio;
+  if (Math.abs(underlay.height - expectedHeight) > Math.max(1e-9, expectedHeight * 1e-6)) {
+    throw new RangeError('underlay dimensions must preserve the source image aspect ratio');
+  }
+  if (!Number.isFinite(underlay.opacity) || underlay.opacity < 0 || underlay.opacity > 1) {
+    throw new RangeError('underlay opacity must be between zero and one');
+  }
+}
+
 function copyProject(project: DesignProject, patch: Partial<DesignProject>): DesignProject {
   return freeze({
     ...project,
@@ -146,6 +170,7 @@ function copyProject(project: DesignProject, patch: Partial<DesignProject>): Des
     walls: freeze([...(patch.walls ?? project.walls)]),
     wallOpenings: freeze([...(patch.wallOpenings ?? project.wallOpenings)]),
     furniture: freeze([...(patch.furniture ?? project.furniture)]),
+    underlays: freeze([...(patch.underlays ?? project.underlays)]),
     materials: freeze([...(patch.materials ?? project.materials)]),
     updatedAt: new Date().toISOString(),
   });
@@ -185,6 +210,13 @@ export function convertProjectUnits(project: DesignProject, units: Units): Desig
       elevation: scaleLength(item.elevation, factor),
       width: scaleLength(item.width, factor),
       depth: scaleLength(item.depth, factor),
+      height: scaleLength(item.height, factor),
+    })),
+    underlays: project.underlays.map((item) => freeze({
+      ...item,
+      x: scaleLength(item.x, factor),
+      y: scaleLength(item.y, factor),
+      width: scaleLength(item.width, factor),
       height: scaleLength(item.height, factor),
     })),
   });
@@ -394,7 +426,37 @@ export function removeLevel(project: DesignProject, levelId: string): DesignProj
     walls: project.walls.filter((wall) => wall.levelId !== levelId),
     wallOpenings: project.wallOpenings.filter((opening) => project.walls.some((wall) => wall.id === opening.wallId && wall.levelId !== levelId)),
     furniture: project.furniture.filter((item) => item.levelId !== levelId),
+    underlays: project.underlays.filter((item) => item.levelId !== levelId),
   });
+}
+
+export type PlanUnderlayInput = Omit<PlanUnderlay, 'id'> & { id?: string };
+export type PlanUnderlayChanges = Partial<Pick<PlanUnderlay, 'name' | 'x' | 'y' | 'width' | 'height' | 'opacity'>>;
+
+export function createPlanUnderlay(project: DesignProject, input: PlanUnderlayInput): DesignProject {
+  const usedIds = new Set(project.underlays.map((item) => item.id));
+  let suffix = project.underlays.length + 1;
+  let underlayId = input.id ?? `underlay-${suffix}`;
+  while (usedIds.has(underlayId)) underlayId = `underlay-${++suffix}`;
+  const underlay = freeze({ ...input, id: id(underlayId, 'underlay id'), levelId: id(input.levelId, 'underlay levelId') });
+  validateUnderlay(underlay);
+  if (!project.levels.some((level) => level.id === underlay.levelId)) throw new RangeError(`unknown underlay level: ${underlay.levelId}`);
+  return copyProject(project, { underlays: [...project.underlays, underlay] });
+}
+
+export function updatePlanUnderlay(project: DesignProject, underlayId: string, changes: PlanUnderlayChanges): DesignProject {
+  id(underlayId, 'underlay id');
+  const current = project.underlays.find((item) => item.id === underlayId);
+  if (!current) throw new RangeError(`unknown underlay: ${underlayId}`);
+  const updated = freeze({ ...current, ...changes });
+  validateUnderlay(updated);
+  return copyProject(project, { underlays: project.underlays.map((item) => item.id === underlayId ? updated : item) });
+}
+
+export function removePlanUnderlay(project: DesignProject, underlayId: string): DesignProject {
+  id(underlayId, 'underlay id');
+  if (!project.underlays.some((item) => item.id === underlayId)) throw new RangeError(`unknown underlay: ${underlayId}`);
+  return copyProject(project, { underlays: project.underlays.filter((item) => item.id !== underlayId) });
 }
 
 export function assignRoomMaterial(room: Room, materialId: string): Room;
@@ -634,6 +696,7 @@ export function normalizeProject(value: unknown): DesignProject {
     throw new TypeError('project is missing required collections');
   }
   if (candidate.wallOpenings !== undefined && !Array.isArray(candidate.wallOpenings)) throw new TypeError('wallOpenings must be an array');
+  if (candidate.underlays !== undefined && !Array.isArray(candidate.underlays)) throw new TypeError('underlays must be an array');
   const units: Units = candidate.units === 'ft' ? 'ft' : 'm';
   const rawLevels = Array.isArray(candidate.levels) ? candidate.levels : [];
   const levels: Level[] = rawLevels.flatMap((raw, index) => {
@@ -682,6 +745,24 @@ export function normalizeProject(value: unknown): DesignProject {
     const rotationZ = Number.isFinite(raw.rotationZ) ? Number(raw.rotationZ) : 0;
     return freeze({ ...item, elevation, rotationX, rotationZ, hidden: raw.hidden === true, levelId: levelFor(item) });
   }) as FurnitureInstance[];
+  const underlays = (candidate.underlays ?? []).map((value) => {
+    if (!value || typeof value !== 'object') throw new TypeError('plan underlay must be an object');
+    const raw = value as Partial<PlanUnderlay>;
+    const underlay = freeze({
+      id: raw.id as string,
+      name: raw.name as string,
+      src: raw.src as string,
+      levelId: levelFor(raw),
+      x: raw.x as number,
+      y: raw.y as number,
+      width: raw.width as number,
+      height: raw.height as number,
+      aspectRatio: raw.aspectRatio as number,
+      opacity: raw.opacity as number,
+    });
+    validateUnderlay(underlay);
+    return underlay;
+  }) as PlanUnderlay[];
   const materials = candidate.materials.map((item) => copyMaterial(item as Material));
   return freeze({
     ...candidate,
@@ -694,6 +775,7 @@ export function normalizeProject(value: unknown): DesignProject {
     walls: freeze(walls),
     wallOpenings: freeze(wallOpenings),
     furniture: freeze(furniture),
+    underlays: freeze(underlays),
     materials: freeze(materials),
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
   });
@@ -736,6 +818,7 @@ export function createStarterProject(
     walls: freeze(walls),
     wallOpenings: freeze([]),
     furniture: freeze([]),
+    underlays: freeze([]),
     materials: freeze(materials),
     updatedAt: new Date().toISOString(),
   });

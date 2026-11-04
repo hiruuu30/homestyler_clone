@@ -45,6 +45,19 @@ export type WallOpening = Readonly<{
   sillHeight: number;
 }>;
 
+export type PlanUnderlay = Readonly<{
+  id: string;
+  name: string;
+  src: string;
+  levelId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  aspectRatio: number;
+  opacity: number;
+}>;
+
 export type FurnitureInstance = Readonly<{
   id: string;
   assetId: string;
@@ -81,6 +94,7 @@ export type DesignProject = Readonly<{
   walls: readonly Wall[];
   wallOpenings: readonly WallOpening[];
   furniture: readonly FurnitureInstance[];
+  underlays: readonly PlanUnderlay[];
   materials: readonly Material[];
   updatedAt: string;
 }>;

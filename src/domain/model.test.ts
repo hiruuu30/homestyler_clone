@@ -5,6 +5,7 @@ import {
   addWallOpening,
   arrayFurniture,
   assignRoomMaterial,
+  createPlanUnderlay,
   createRectRoom,
   createPolygonRoom,
   createStarterProject,
@@ -14,6 +15,7 @@ import {
   moveFurniture,
   normalizeProject,
   removeLevel,
+  removePlanUnderlay,
   removeFurniture,
   removeWall,
   removeWallOpening,
@@ -22,6 +24,7 @@ import {
   setFurnitureHidden,
   splitWall,
   updateFurniture,
+  updatePlanUnderlay,
   updateWallOpening,
   updateWallEndpoints,
   updateWallHeight,
@@ -108,6 +111,10 @@ describe('domain model', () => {
 
   it('converts every project length between metres and feet without changing physical geometry', () => {
     let project = createStarterProject();
+    project = createPlanUnderlay(project, {
+      id: 'underlay-1', name: 'plan.jpg', src: 'data:image/jpeg;base64,/9j/2Q==', levelId: 'floor-ground',
+      x: 1, y: 2, width: 5, height: 2.5, aspectRatio: 2, opacity: 0.45,
+    });
     project = addWallOpening(project, 'wall-north', 'window');
     project = addFurniture(project, furniture);
     project = addLevel(project, 'Upper Floor');
@@ -136,13 +143,58 @@ describe('domain model', () => {
       },
     });
     expect(imperial.levels[1].height * 0.3048).toBeCloseTo(project.levels[1].height, 8);
+    expect(imperial.underlays[0]).toMatchObject({
+      x: expect.closeTo(project.underlays[0].x / 0.3048, 8),
+      y: expect.closeTo(project.underlays[0].y / 0.3048, 8),
+      width: expect.closeTo(project.underlays[0].width / 0.3048, 8),
+      height: expect.closeTo(project.underlays[0].height / 0.3048, 8),
+      aspectRatio: 2,
+      src: project.underlays[0].src,
+    });
     expect(project.units).toBe('m');
     expect(Object.isFrozen(imperial.walls[0].start)).toBe(true);
 
     const metricAgain = convertProjectUnits(imperial, 'm');
     expect(metricAgain.rooms[0].points).toEqual(project.rooms[0].points);
     expect(metricAgain.walls[0].thickness).toBe(project.walls[0].thickness);
+    expect(metricAgain.underlays[0]).toEqual(project.underlays[0]);
     expect(convertProjectUnits(project, 'm')).toBe(project);
+  });
+
+  it('creates, updates, removes, validates, and migrates local plan underlays', () => {
+    const project = createStarterProject();
+    const withImage = createPlanUnderlay(project, {
+      name: 'survey.png', src: 'data:image/png;base64,iVBORw0KGgo=', levelId: 'floor-ground',
+      x: -2, y: 1, width: 6, height: 3, aspectRatio: 2, opacity: 0.45,
+    });
+    expect(withImage.underlays[0]).toMatchObject({ id: 'underlay-1', name: 'survey.png', x: -2, width: 6, opacity: 0.45 });
+    expect(Object.isFrozen(withImage.underlays[0])).toBe(true);
+
+    const changed = updatePlanUnderlay(withImage, 'underlay-1', { x: 3, width: 8, height: 4, opacity: 0.7 });
+    expect(changed.underlays[0]).toMatchObject({ x: 3, width: 8, height: 4, opacity: 0.7 });
+    expect(removePlanUnderlay(changed, 'underlay-1').underlays).toEqual([]);
+    expect(() => updatePlanUnderlay(withImage, 'underlay-1', { opacity: 1.1 })).toThrow(/between zero and one/);
+    expect(() => createPlanUnderlay(project, {
+      name: 'bad', src: 'https://example.invalid/plan.jpg', levelId: 'floor-ground',
+      x: 0, y: 0, width: 1, height: 1, aspectRatio: 1, opacity: 0.5,
+    })).toThrow(/embedded image/);
+    expect(() => createPlanUnderlay(project, {
+      name: 'stretched', src: 'data:image/jpeg;base64,/9j/2Q==', levelId: 'floor-ground',
+      x: 0, y: 0, width: 4, height: 3, aspectRatio: 2, opacity: 0.5,
+    })).toThrow(/aspect ratio/);
+    expect(() => createPlanUnderlay(project, {
+      name: 'oversize', src: `data:image/jpeg;base64,${'A'.repeat(1_500_000)}`, levelId: 'floor-ground',
+      x: 0, y: 0, width: 1, height: 1, aspectRatio: 1, opacity: 0.5,
+    })).toThrow(/too large/);
+    expect(normalizeProject({ ...project, underlays: undefined }).underlays).toEqual([]);
+
+    const secondFloor = addLevel(project, 'Upper Floor');
+    const upstairs = createPlanUnderlay(secondFloor, {
+      name: 'upper.png', src: 'data:image/png;base64,iVBORw0KGgo=', levelId: secondFloor.activeLevelId,
+      x: 0, y: 0, width: 3, height: 3, aspectRatio: 1, opacity: 0.5,
+    });
+    expect(removeLevel(upstairs, secondFloor.activeLevelId).underlays).toEqual([]);
+    expect(project.underlays).toEqual([]);
   });
 
   it('creates imperial starter geometry and new objects at metric-equivalent dimensions', () => {

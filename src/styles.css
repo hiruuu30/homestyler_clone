@@ -208,3 +208,12 @@
 .unit-setting select{max-width:135px;height:29px;padding:0 7px;border:1px solid #dfe2e5;border-radius:4px;background:#fff;color:#343940;font-size:9px}
 
 .plan-polygon-preview{fill:none;stroke:#2469d2;stroke-width:.045;stroke-dasharray:.14 .08;stroke-linejoin:round;pointer-events:none}.plan-polygon-vertex{fill:#fff;stroke:#2469d2;stroke-width:.04;pointer-events:none}
+
+.plan-underlay-list { margin: 16px 0; }
+.plan-underlay-card { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; padding: 11px; border: 1px solid #dfe5eb; border-radius: 9px; background: #f8fafc; }
+.plan-underlay-card > strong { grid-column: 1 / -1; overflow: hidden; color: #263445; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.plan-underlay-card > label { display: grid; gap: 4px; color: #637184; font-size: 10px; }
+.plan-underlay-card input[type="number"] { width: 100%; min-width: 0; height: 30px; padding: 4px 7px; border: 1px solid #d6dee7; border-radius: 6px; color: #29384a; background: #fff; font: inherit; font-size: 11px; }
+.plan-underlay-card .plan-underlay-opacity { grid-column: 1 / -1; grid-template-columns: 1fr; }
+.plan-underlay-card input[type="range"] { width: 100%; accent-color: #5779a5; }
+.plan-underlay-remove { grid-column: 1 / -1; min-height: 29px; border: 0; border-radius: 6px; color: #8b3c3c; background: #f5e9e8; font-size: 10px; cursor: pointer; }

@@ -32,6 +32,7 @@ function projectBounds(project: DesignProject): { minX: number; minY: number; wi
   project.rooms.forEach((room) => points.push(...room.points));
   project.walls.forEach((wall) => points.push(wall.start, wall.end));
   project.furniture.filter((item) => !item.hidden).forEach((item) => points.push(item.position));
+  project.underlays.forEach((item) => points.push({ x: item.x, y: item.y }, { x: item.x + item.width, y: item.y + item.height }));
   if (points.length === 0) return { minX: -padding, minY: -padding, width: 20 * unitsPerMetre, height: 14 * unitsPerMetre };
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
@@ -249,6 +250,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
         </pattern>
       </defs>
       <rect className="plan-grid" x={bounds.minX} y={bounds.minY} width={bounds.width} height={bounds.height} fill="url(#plan-grid)" />
+      {project.underlays.map((underlay) => <image key={underlay.id} href={underlay.src} x={underlay.x} y={underlay.y} width={underlay.width} height={underlay.height} opacity={underlay.opacity} preserveAspectRatio="none" pointerEvents="none" aria-label={`${underlay.name} plan underlay`} />)}
       {project.rooms.map((room) => (
         <polygon
           key={room.id}

@@ -5,9 +5,9 @@ import {
   PenTool, Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
-  addFurniture, addWallOpening, arrayFurniture, assignRoomMaterial, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
+  addFurniture, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
-  removeLevel as removeProjectLevel, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updateWallOpening,
+  removeLevel as removeProjectLevel, removePlanUnderlay, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening,
   updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
@@ -63,6 +63,7 @@ export default function App() {
   const [arrayOffsetX, setArrayOffsetX] = useState(1);
   const [arrayOffsetY, setArrayOffsetY] = useState(0);
   const importRef = useRef<HTMLInputElement>(null);
+  const planImageRef = useRef<HTMLInputElement>(null);
 
   const activeLevel = project.levels.find((level) => level.id === activeLevelId) ?? project.levels[0];
   const visibleProject = useMemo(() => ({
@@ -72,6 +73,7 @@ export default function App() {
     walls: project.walls.filter((item) => item.levelId === activeLevelId),
     furniture: project.furniture.filter((item) => item.levelId === activeLevelId),
     wallOpenings: project.wallOpenings.filter((opening) => project.walls.some((wall) => wall.id === opening.wallId && wall.levelId === activeLevelId)),
+    underlays: project.underlays.filter((item) => item.levelId === activeLevelId),
   }), [project, activeLevelId]);
   const selectedRoom = visibleProject.rooms.find((item) => item.id === selectedId) ?? null;
   const selectedWall = visibleProject.walls.find((item) => item.id === selectedId) ?? null;
@@ -282,6 +284,68 @@ export default function App() {
     downloadText(exportQuantitiesCsv(project), deliverableFileName(project.name, 'csv'), 'text/csv;charset=utf-8');
     notify('Project quantities CSV exported');
   }
+  async function importPlanImage(file?: File) {
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 12_000_000) {
+      notify('Choose a PNG, JPEG or WebP under 12 MB');
+      if (planImageRef.current) planImageRef.current.value = '';
+      return;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      if (bitmap.width > 20_000 || bitmap.height > 20_000 || !bitmap.width || !bitmap.height) {
+        bitmap.close();
+        throw new RangeError('Image dimensions are too large');
+      }
+      const aspectRatio = bitmap.width / bitmap.height;
+      const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) {
+        bitmap.close();
+        throw new Error('Image processing is unavailable');
+      }
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const src = canvas.toDataURL('image/jpeg', 0.82);
+      if (src.length > 1_500_000) throw new RangeError('This plan image is too detailed for local project storage');
+      const width = 5 * metresToProjectUnits;
+      const height = width / aspectRatio;
+      const points = [...visibleProject.rooms.flatMap((room) => room.points), ...visibleProject.walls.flatMap((wall) => [wall.start, wall.end])];
+      const center = centerOf(points);
+      const next = createPlanUnderlay(project, {
+        id: nextEntityId(project.underlays, 'underlay'),
+        name: file.name.slice(0, 120) || 'Floor plan image',
+        src,
+        levelId: activeLevelId,
+        x: center.x - width / 2,
+        y: center.y - height / 2,
+        width,
+        height,
+        aspectRatio,
+        opacity: 0.45,
+      });
+      commit(next);
+      setCameraFitRequest((value) => value + 1);
+      setView('plan');
+      notify('Plan image added · adjust size and position below');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not import this image');
+    }
+    if (planImageRef.current) planImageRef.current.value = '';
+  }
+  function updateUnderlay(id: string, changes: Parameters<typeof updatePlanUnderlay>[2]) {
+    try { commit(updatePlanUnderlay(project, id, changes)); }
+    catch (error) { notify(error instanceof Error ? error.message : 'Could not update this image'); }
+  }
+  function deleteUnderlay(id: string) {
+    commit(removePlanUnderlay(project, id));
+    notify('Plan image removed · Undo to restore');
+  }
   function changeUnits(units: 'm' | 'ft') {
     if (units === project.units) return;
     commit(convertProjectUnits(project, units));
@@ -375,8 +439,38 @@ export default function App() {
           {panel === 'build' && <div className="panel-scroll build-panel-scroll"><div className="build-panel-content">
             <div className="build-template-grid">
               <button className="build-template-card" disabled title="Room templates are not implemented"><div className="build-card-eyebrow">Select</div><div className="build-card-title">Templates</div><span className="build-card-art"><Building2 size={27} /></span></button>
-              <button className="build-template-card" disabled title="Floor plan image import is not implemented"><div className="build-card-eyebrow">Import</div><div className="build-card-title">Floor plan</div><span className="build-card-art"><Upload size={25} /></span><span className="build-new-badge">New</span></button>
+              <button className="build-template-card" onClick={() => planImageRef.current?.click()} title="Import a floor-plan image underlay"><div className="build-card-eyebrow">Import</div><div className="build-card-title">Floor plan</div><span className="build-card-art"><Upload size={25} /></span><span className="build-new-badge">New</span></button>
             </div>
+            <input ref={planImageRef} type="file" accept="image/png,image/jpeg,image/webp" hidden aria-label="Choose floor plan image" onChange={(event) => importPlanImage(event.currentTarget.files?.[0])} />
+            {visibleProject.underlays.length > 0 && <div className="plan-underlay-list">
+              <div className="section-label">PLAN IMAGES · {activeLevel.name.toUpperCase()}</div>
+              {visibleProject.underlays.map((underlay) => <div className="plan-underlay-card" key={underlay.id}>
+                <strong title={underlay.name}>{underlay.name}</strong>
+                <label>Width · {lengthUnit}<input key={`${underlay.id}-width-${underlay.width}`} type="number" min="0.01" step="0.1" defaultValue={underlay.width.toFixed(2)} onBlur={(event) => {
+                  const width = event.currentTarget.valueAsNumber;
+                  if (!Number.isFinite(width) || width <= 0) { event.currentTarget.value = underlay.width.toFixed(2); return; }
+                  if (Math.abs(width - underlay.width) > 1e-9) updateUnderlay(underlay.id, { width, height: width / underlay.aspectRatio });
+                }} /></label>
+                <label>X · {lengthUnit}<input key={`${underlay.id}-x-${underlay.x}`} type="number" step="0.1" defaultValue={underlay.x.toFixed(2)} onBlur={(event) => {
+                  const x = event.currentTarget.valueAsNumber;
+                  if (!Number.isFinite(x)) { event.currentTarget.value = underlay.x.toFixed(2); return; }
+                  if (Math.abs(x - underlay.x) > 1e-9) updateUnderlay(underlay.id, { x });
+                }} /></label>
+                <label>Y · {lengthUnit}<input key={`${underlay.id}-y-${underlay.y}`} type="number" step="0.1" defaultValue={underlay.y.toFixed(2)} onBlur={(event) => {
+                  const y = event.currentTarget.valueAsNumber;
+                  if (!Number.isFinite(y)) { event.currentTarget.value = underlay.y.toFixed(2); return; }
+                  if (Math.abs(y - underlay.y) > 1e-9) updateUnderlay(underlay.id, { y });
+                }} /></label>
+                <label className="plan-underlay-opacity">Opacity<input key={`${underlay.id}-opacity-${underlay.opacity}`} type="range" min="0.05" max="1" step="0.05" defaultValue={underlay.opacity} onPointerUp={(event) => {
+                  const opacity = event.currentTarget.valueAsNumber;
+                  if (Math.abs(opacity - underlay.opacity) > 1e-9) updateUnderlay(underlay.id, { opacity });
+                }} onKeyUp={(event) => {
+                  const opacity = event.currentTarget.valueAsNumber;
+                  if (Math.abs(opacity - underlay.opacity) > 1e-9) updateUnderlay(underlay.id, { opacity });
+                }} /></label>
+                <button className="plan-underlay-remove" onClick={() => deleteUnderlay(underlay.id)}>Remove image · Undo available</button>
+              </div>)}
+            </div>}
             <button className="build-new-plan" onClick={() => { setView('plan'); setTool('room'); }}><Plus size={15} />Add a room to the plan</button>
             <span className="section-label build-section build-section-first">Draw walls</span>
             <div className="build-reference-grid build-wall-tools">
