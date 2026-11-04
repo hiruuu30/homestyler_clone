@@ -5,7 +5,7 @@ import {
   PenTool, Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
-  addFurniture, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
+  addFurniture, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removePlanUnderlay, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening,
   updateWallEndpoints, updateWallHeight, updateWallThickness,
@@ -159,11 +159,14 @@ export default function App() {
   }
   function createWall(start: Point, end: Point) {
     if (distance(start, end) * metresPerProjectUnit < 0.05) { notify('Draw a longer wall segment'); return; }
-    const wall = makeWall(nextEntityId(project.walls, 'wall'), start, end, undefined, undefined, undefined, activeLevelId, project.units);
-    const next = { ...project, walls: [...project.walls, wall] };
-    commit(next);
-    setSelectedId(wall.id);
-    setTool('select');
+    try {
+      const wall = makeWall(nextEntityId(project.walls, 'wall'), start, end, undefined, undefined, undefined, activeLevelId, project.units);
+      commit(addProjectWall(project, wall));
+      setSelectedId(wall.id);
+      setTool('select');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not connect this wall');
+    }
   }
   function addSofa() {
     const room = selectedRoom ?? visibleProject.rooms[0];

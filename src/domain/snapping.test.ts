@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createStarterProject } from './model';
+import { createRectRoom, createStarterProject } from './model';
 import { snapPlanPoint } from './snapping';
 
 describe('plan endpoint snapping', () => {
@@ -9,6 +9,14 @@ describe('plan endpoint snapping', () => {
     expect(snapPlanPoint(project, { x: 4.24, y: -0.47 }, 0.1)).toEqual({ x: 4.2, y: -0.5 });
     const distant = { x: 7, y: 4 };
     expect(snapPlanPoint(project, distant, 0.1)).toBe(distant);
+  });
+
+  it('snaps to the nearest point on wall and room edges when no endpoint is nearby', () => {
+    const project = createStarterProject();
+    expect(snapPlanPoint(project, { x: 5.1, y: -0.46 }, 0.1)).toEqual({ x: 5.1, y: -0.5 });
+
+    const room = createRectRoom('room-edge', 'Room edge', 4, 2);
+    expect(snapPlanPoint({ rooms: [room], walls: [] }, { x: 2.1, y: 0.04 }, 0.1)).toEqual({ x: 2.1, y: 0 });
   });
 
   it('rejects invalid tolerance and non-finite candidate coordinates', () => {

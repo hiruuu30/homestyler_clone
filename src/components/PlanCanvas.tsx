@@ -133,8 +133,11 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       }
       return;
     }
+    const edgeTarget = tool === 'wall' && event.target instanceof SVGElement
+      && (event.target.classList.contains('plan-wall') || event.target.classList.contains('plan-room'));
     const backgroundTarget = event.target === event.currentTarget
-      || (event.target instanceof SVGElement && event.target.classList.contains('plan-grid'));
+      || (event.target instanceof SVGElement && event.target.classList.contains('plan-grid'))
+      || edgeTarget;
     if (tool !== 'room' && tool !== 'wall') {
       if (backgroundTarget) onSelect(null);
       return;
@@ -256,7 +259,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
           key={room.id}
           className={`plan-room${selectedId === room.id ? ' is-selected' : ''}`}
           points={pointsAttribute(room.points)}
-          onPointerDown={(event) => { if (tool === 'polygon') return; event.stopPropagation(); onSelect(room.id); }}
+          onPointerDown={(event) => { if (tool === 'polygon' || tool === 'wall') return; event.stopPropagation(); onSelect(room.id); }}
         />
       ))}
       {project.walls.map((wall) => (
@@ -268,7 +271,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
           x2={wall.end.x}
           y2={wall.end.y}
           strokeWidth={wall.thickness}
-          onPointerDown={(event) => { if (tool === 'polygon') return; event.stopPropagation(); onSelect(wall.id); }}
+          onPointerDown={(event) => { if (tool === 'polygon' || tool === 'wall') return; event.stopPropagation(); onSelect(wall.id); }}
         />
       ))}
       {project.wallOpenings.map((opening) => {

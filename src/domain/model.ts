@@ -318,6 +318,45 @@ export function createWall(
   return freeze({ id: wallId, start: from, end: to, thickness: wallThickness, height: wallHeight, materialId, levelId });
 }
 
+/** Add a wall and connect its endpoints to same-floor wall and room edges. */
+export function addWall(project: DesignProject, input: Wall): DesignProject {
+  id(input.id, 'wall id');
+  if (project.walls.some((wall) => wall.id === input.id)) throw new RangeError(`wall ID already exists: ${input.id}`);
+  const wall = createWall(input.id, input.start, input.end, input.thickness, input.height, input.materialId, input.levelId, project.units);
+  let next = copyProject(project, { walls: [...project.walls, wall] });
+  for (const endpoint of [wall.start, wall.end]) {
+    while (true) {
+      const host = next.walls.find((candidate) => candidate.id !== wall.id
+        && candidate.levelId === wall.levelId
+        && segmentFraction(endpoint, candidate.start, candidate.end) !== null);
+      if (!host) break;
+      const fraction = segmentFraction(endpoint, host.start, host.end);
+      if (fraction === null) break;
+      next = splitWall(next, host.id, fraction);
+    }
+  }
+  const rooms = next.rooms.map((room) => {
+    if (room.levelId !== wall.levelId) return room;
+    const targets = [wall.start, wall.end].filter((endpoint) => !room.points.some((vertex) => vertex.x === endpoint.x && vertex.y === endpoint.y));
+    const expanded: Point[] = [];
+    let inserted = false;
+    for (let index = 0; index < room.points.length; index += 1) {
+      const from = room.points[index];
+      const to = room.points[(index + 1) % room.points.length];
+      expanded.push(from);
+      const insertions = targets
+        .map((endpoint) => ({ point: endpoint, fraction: segmentFraction(endpoint, from, to) }))
+        .filter((item): item is { point: Point; fraction: number } => item.fraction !== null)
+        .sort((left, right) => left.fraction - right.fraction);
+      insertions.forEach((item) => { expanded.push(item.point); inserted = true; });
+    }
+    if (!inserted) return room;
+    const validated = createPolygonRoom(room.id, room.name, expanded, room.floorMaterialId, room.levelId, project.units);
+    return freeze({ ...room, points: validated.points });
+  });
+  return copyProject(next, { rooms });
+}
+
 export function addWallOpening(project: DesignProject, wallId: string, kind: WallOpeningKind): DesignProject {
   id(wallId, 'wall id');
   if (kind !== 'door' && kind !== 'window') throw new TypeError('opening kind must be door or window');

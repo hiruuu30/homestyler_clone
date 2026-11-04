@@ -25,6 +25,26 @@ export function snapPlanPoint(
       nearestDistance = distance;
     }
   }
+  if (nearest !== undefined) return { x: nearest.x, y: nearest.y };
+
+  const segments = [
+    ...project.walls.map((wall) => [wall.start, wall.end] as const),
+    ...project.rooms.flatMap((room) => room.points.map((point, index) => [point, room.points[(index + 1) % room.points.length]] as const)),
+  ];
+  for (const [start, end] of segments) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared <= 0) continue;
+    const fraction = ((candidate.x - start.x) * dx + (candidate.y - start.y) * dy) / lengthSquared;
+    if (fraction <= 0 || fraction >= 1) continue;
+    const projected = { x: start.x + fraction * dx, y: start.y + fraction * dy };
+    const distance = Math.hypot(projected.x - candidate.x, projected.y - candidate.y);
+    if (distance <= nearestDistance && (nearest === undefined || distance < nearestDistance)) {
+      nearest = projected;
+      nearestDistance = distance;
+    }
+  }
 
   return nearest === undefined ? candidate : { x: nearest.x, y: nearest.y };
 }

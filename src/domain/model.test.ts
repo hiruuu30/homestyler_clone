@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addLevel,
   addFurniture,
+  addWall,
   addWallOpening,
   arrayFurniture,
   assignRoomMaterial,
@@ -283,6 +284,36 @@ describe('domain model', () => {
     const throughOpening = addWallOpening(project, 'host', 'window');
     expect(() => updateWallEndpoints(throughOpening, 'branch', { end: { x: 2, y: 0 } })).toThrow(/cannot split a wall through an opening/);
     expect(project.walls).toHaveLength(2);
+  });
+
+  it('connects newly added wall endpoints to host segments and room edges', () => {
+    const base = createStarterProject();
+    const boundary = createWall('boundary', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const branch = createWall('branch', { x: 2, y: 2 }, { x: 2, y: 0 });
+    const room = createPolygonRoom('t-room', 'T-junction room', [
+      { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 },
+    ]);
+    const project = { ...base, walls: [boundary], rooms: [room] };
+    const added = addWall(project, branch);
+
+    expect(added.walls).toHaveLength(3);
+    expect(added.walls.find((wall) => wall.id === 'boundary')).toMatchObject({ start: { x: 0, y: 0 }, end: { x: 2, y: 0 } });
+    expect(added.walls.find((wall) => wall.id === 'wall-1')).toMatchObject({ start: { x: 2, y: 0 }, end: { x: 4, y: 0 } });
+    expect(added.walls.find((wall) => wall.id === 'branch')?.start).toEqual({ x: 2, y: 2 });
+    expect(added.rooms[0].points).toContainEqual({ x: 2, y: 0 });
+    expect(roomArea(added.rooms[0])).toBe(8);
+    expect(() => addWall(project, boundary)).toThrow(/already exists/);
+  });
+
+  it('rejects a newly drawn wall endpoint that would split a hosted opening in two', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: 0, y: 0 }, { x: 4, y: 0 });
+    const project = { ...base, walls: [host], rooms: [] };
+    const withWindow = addWallOpening(project, 'host', 'window');
+    const branch = createWall('branch', { x: 2, y: 2 }, { x: 2, y: 0 });
+
+    expect(() => addWall(withWindow, branch)).toThrow(/cannot split a wall through an opening/);
+    expect(withWindow.walls).toHaveLength(1);
   });
 
   it('rejects a connected-node edit that collapses a room edge or invalidates a hosted opening', () => {
