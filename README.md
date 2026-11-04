@@ -1,6 +1,6 @@
 # Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The latest local milestone adds per-room floor-finish mapping controls and procedural plan/3D rendering. The live production alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); the feature ledger records the currently deployed revision separately from local work. This is not a complete clone or a parity claim. Original catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The latest deployed milestone adds per-room floor-finish mapping controls and procedural plan/3D rendering. The public production alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); the feature ledger records the verified code revision and bundle evidence. This is not a complete clone or a parity claim. Original catalog assets remain deferred.
 
 ## Current milestone: floor-finish mapping
 
@@ -17,7 +17,7 @@ The independent editor supports rectangular and concave polygon rooms, snapping,
 - **Verified full-parity completion: 0%.** No complete feature/state suite has passed exact functional and pixel-level comparison.
 - **Original catalog asset coverage: 0%.** No original Homestyler models, materials or textures are present.
 - **Local checks:** 96 unit tests pass; the strict TypeScript/Vite production build succeeds, with a warning for the large lazy 3D chunk. Chromium verified visible 2D/3D pattern changes, transformed mapping values, Undo/Redo, save/reload, and no page errors.
-- **Production:** deployment status and byte-for-byte bundle evidence are tracked in `docs/feature-ledger.csv`; local verification is not deployment verification.
+- **Production:** the public alias returns HTTP 200, and its HTML plus every JavaScript/CSS asset—including the lazy 3D chunk—match the tested production build byte-for-byte; details are in `docs/feature-ledger.csv`.
 - Significant scope remains incomplete, including broader topology, catalog/material coverage, cloud workflows, advanced/server-dependent features, and a comprehensive golden-image suite. Use only independently authored code and generic procedural finishes until authorized licensed assets are available.
 
 ## Project files
