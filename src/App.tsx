@@ -1,13 +1,13 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Building2, Check, ChevronDown, ChevronRight, CircleHelp, Copy, Download,
-  FilePlus2, Grid2X2, Layers3, Maximize2, MousePointer2, PaintBucket, PanelLeftClose,
+  Eye, EyeOff, FilePlus2, Grid2X2, Layers3, Maximize2, MousePointer2, PaintBucket, PanelLeftClose,
   Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
 import {
-  addFurniture, assignRoomMaterial, createRectRoom, createStarterProject, duplicateFurniture,
+  addFurniture, arrayFurniture, assignRoomMaterial, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
-  removeLevel as removeProjectLevel, removeWall, roomArea, rotateFurniture, splitWall as splitProjectWall, updateFurniture,
+  removeLevel as removeProjectLevel, removeWall, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture,
   updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
@@ -49,6 +49,7 @@ export default function App() {
   const [undoStack, setUndoStack] = useState<DesignProject[]>([]);
   const [redoStack, setRedoStack] = useState<DesignProject[]>([]);
   const [view, setView] = useState<ViewMode>('plan');
+  const [cameraFitRequest, setCameraFitRequest] = useState(0);
   const [panel, setPanel] = useState<PanelMode>('build');
   const [tool, setTool] = useState<ToolMode>('select');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -56,6 +57,10 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [arraySettingsOpen, setArraySettingsOpen] = useState(false);
+  const [arrayCopies, setArrayCopies] = useState(2);
+  const [arrayOffsetX, setArrayOffsetX] = useState(1);
+  const [arrayOffsetY, setArrayOffsetY] = useState(0);
   const importRef = useRef<HTMLInputElement>(null);
 
   const activeLevel = project.levels.find((level) => level.id === activeLevelId) ?? project.levels[0];
@@ -86,6 +91,11 @@ export default function App() {
     setUndoStack((items) => items.slice(0, -1));
     setProject(previous);
     setActiveLevelId(previous.activeLevelId);
+    setSelectedId((currentId) => currentId && [
+      ...previous.rooms.map((item) => item.id),
+      ...previous.walls.map((item) => item.id),
+      ...previous.furniture.map((item) => item.id),
+    ].includes(currentId) ? currentId : null);
     setSaved(false);
   }
   function redo() {
@@ -159,6 +169,29 @@ export default function App() {
     const next = duplicateFurniture(project, selectedFurniture.id);
     commit(next);
     setSelectedId(next.furniture.at(-1)?.id ?? null);
+  }
+  function createSelectedFurnitureArray() {
+    if (!selectedFurniture) return;
+    try {
+      const next = arrayFurniture(project, selectedFurniture.id, arrayCopies, { x: arrayOffsetX, y: arrayOffsetY });
+      commit(next);
+      setSelectedId(next.furniture.at(-1)?.id ?? null);
+      setArraySettingsOpen(false);
+      notify(`${arrayCopies} furniture copies added · Undo to restore`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not create furniture array');
+    }
+  }
+  function toggleArraySettings() {
+    const open = !arraySettingsOpen;
+    if (open && selectedFurniture) setArrayOffsetX(Number((selectedFurniture.width + 0.2).toFixed(2)));
+    setArraySettingsOpen(open);
+  }
+  function toggleSelectedFurnitureHidden() {
+    if (!selectedFurniture) return;
+    const hidden = !selectedFurniture.hidden;
+    commit(setFurnitureHidden(project, selectedFurniture.id, hidden));
+    notify(hidden ? 'Object hidden · Undo to restore' : 'Object shown');
   }
   function deleteSelected() {
     if (selectedFurniture) commit(removeFurniture(project, selectedFurniture.id));
@@ -324,6 +357,9 @@ export default function App() {
             <button className="action-row" onClick={newDesign}><FilePlus2 size={16} />New design</button>
             <button className="action-row" onClick={() => importRef.current?.click()}><Upload size={16} />Import RoomLab JSON</button>
             <button className="action-row" onClick={exportProject}><Download size={16} />Export RoomLab JSON</button>
+            <div className="section-label">HIDDEN OBJECTS · {activeLevel.name.toUpperCase()}</div>
+            {visibleProject.furniture.filter((item) => item.hidden).map((item) => <button key={item.id} className="action-row hidden-object-row" onClick={() => { commit(setFurnitureHidden(project, item.id, false)); setSelectedId(item.id); notify('Object shown'); }}><Eye size={15} /><span>Show {item.name}</span></button>)}
+            {!visibleProject.furniture.some((item) => item.hidden) && <p className="hidden-empty">No hidden objects on this floor.</p>}
             <div className="tip"><b>Local persistence only</b><p>Save stores data in this browser. Cloud accounts, sharing and project history are not implemented.</p></div>
           </div>}
           <div className="panel-foot"><span className="status-dot" />Starter build · local-only storage</div>
@@ -332,8 +368,8 @@ export default function App() {
           {collapsed && <button className="expand-panel" onClick={() => setCollapsed(false)} aria-label="Show panel"><ChevronRight size={17} /></button>}
           <div className="viewport-area">
             {view === 'plan'
-              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} />
-              : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
+              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} fitRequest={cameraFitRequest} />
+              : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport key={cameraFitRequest} project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
             <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
           </div>
           <footer className="bottom-bar">
@@ -342,7 +378,7 @@ export default function App() {
             <button className={`view-tab ${view === 'plan' ? 'selected' : ''}`} onClick={() => { setView('plan'); setTool('select'); }}>2D Plan</button>
             <button className={`view-tab ${view === '3d' ? 'selected' : ''}`} onClick={() => { setView('3d'); setTool('select'); }}>3D View</button>
             <button className="view-tab disabled" disabled title="Not implemented">Walkthrough</button>
-            <button className="icon-btn" title="Fit view" onClick={() => notify('View fitted to current project')}><Maximize2 size={16} /></button>
+            <button className="icon-btn" title="Fit view" onClick={() => { setCameraFitRequest((value) => value + 1); notify('View fitted to current project'); }}><Maximize2 size={16} /></button>
           </footer>
         </main>
         <aside className={`inspector${selectedWall ? ' wall-state' : ''}`}>
@@ -380,6 +416,15 @@ export default function App() {
             <NumericField label="Rotation Z" value={selectedFurniture.rotationZ} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotationZ: value }))} />
             <button className="rotate-btn" onClick={rotateSelected}><RotateCw size={15} /> Rotate 45°</button>
             <button className="rotate-btn" onClick={duplicateSelectedFurniture}><Copy size={14} /> Duplicate object</button>
+            <button className="rotate-btn" aria-expanded={arraySettingsOpen} onClick={toggleArraySettings}><Copy size={14} /> Linear array</button>
+            {arraySettingsOpen && <div className="array-settings" aria-label="Linear array settings">
+              <NumericField label="Copies" value={arrayCopies} unit="items" min={1} step={1} onCommit={setArrayCopies} />
+              <NumericField label="Spacing X" value={arrayOffsetX} unit="m" step={0.1} onCommit={setArrayOffsetX} />
+              <NumericField label="Spacing Y" value={arrayOffsetY} unit="m" step={0.1} onCommit={setArrayOffsetY} />
+              <div className="array-actions"><button className="array-cancel" onClick={() => setArraySettingsOpen(false)}>Cancel</button><button className="array-apply" onClick={createSelectedFurnitureArray}>Create array</button></div>
+              <small>Spacing is applied between each successive copy. Up to 100 copies.</small>
+            </div>}
+            <button className="rotate-btn" onClick={toggleSelectedFurnitureHidden}>{selectedFurniture.hidden ? <Eye size={14} /> : <EyeOff size={14} />}{selectedFurniture.hidden ? ' Show object' : ' Hide object'}</button>
             <button className="rotate-btn danger-action" onClick={deleteSelected}><Trash2 size={14} /> Delete object</button>
           </section></div>}
           <div className="inspector-foot"><span className={saved ? 'saved' : 'unsaved'}>{saved ? <Check size={13} /> : <i />}{saved ? 'Saved locally' : 'Unsaved changes'}</span><span>{project.units}</span></div>

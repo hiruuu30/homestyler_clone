@@ -193,3 +193,11 @@
 .wall-fields{margin-top:43.5px}
 .wall-fields>label{height:32px;min-height:32px}
 .wall-fields .wall-delete{margin-top:16.5px}
+.array-settings{margin:8px 0 10px;padding:9px;border:1px solid #e5e7e9;border-radius:5px;background:#fafbfc}
+.array-settings label{min-height:33px}
+.array-settings small{display:block;margin-top:6px;color:#858b93;font-size:8px;line-height:1.4}
+.array-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:7px}
+.array-actions button{height:27px;padding:0 9px;border:1px solid #dfe2e6;border-radius:4px;background:#fff;font-size:9px;cursor:pointer}
+.array-actions .array-apply{border-color:#2868d5;background:#2868d5;color:#fff}
+.hidden-object-row{color:#476eab}
+.hidden-empty{margin:7px 4px 12px;color:#92979e;font-size:9px}

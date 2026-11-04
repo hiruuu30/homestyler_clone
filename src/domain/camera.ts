@@ -13,7 +13,7 @@ export function frameProjectCamera(project: DesignProject, aspect: number, field
     ...project.rooms.flatMap((room) => room.points),
     ...project.walls.flatMap((wall) => [wall.start, wall.end]),
   ];
-  project.furniture.forEach((item) => {
+  project.furniture.filter((item) => !item.hidden).forEach((item) => {
     const angle = item.rotation * (Math.PI / 180);
     const halfWidth = item.width / 2;
     const halfDepth = item.depth / 2;
@@ -36,7 +36,8 @@ export function frameProjectCamera(project: DesignProject, aspect: number, field
   const width = Math.max(1, maxX - minX);
   const depth = Math.max(1, maxY - minY);
   const floorElevation = project.levels.find((level) => level.id === project.activeLevelId)?.elevation ?? 0;
-  const maxHeight = Math.max(2.4, ...project.walls.map((wall) => wall.height), ...project.furniture.map((item) => item.height));
+  const visibleFurniture = project.furniture.filter((item) => !item.hidden);
+  const maxHeight = Math.max(2.4, ...project.walls.map((wall) => wall.height), ...visibleFurniture.map((item) => item.height));
   const halfDiagonal = Math.hypot(width / 2, depth / 2, maxHeight / 2);
   const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
   const safeFov = Number.isFinite(fieldOfViewDegrees) ? Math.min(150, Math.max(10, fieldOfViewDegrees)) : 42;

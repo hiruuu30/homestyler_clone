@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addLevel,
   addFurniture,
+  arrayFurniture,
   assignRoomMaterial,
   createRectRoom,
   createStarterProject,
@@ -14,6 +15,7 @@ import {
   removeWall,
   roomArea,
   rotateFurniture,
+  setFurnitureHidden,
   splitWall,
   updateFurniture,
   updateWallHeight,
@@ -143,12 +145,23 @@ describe('domain model', () => {
     expect(() => updateFurniture(project, 'chair-1', { rotationZ: Number.POSITIVE_INFINITY })).toThrow(/finite/);
   });
 
+  it('hides and restores furniture without deleting the instance', () => {
+    const project = addFurniture(createStarterProject(), furniture);
+    const hidden = setFurnitureHidden(project, 'chair-1', true);
+    const restored = setFurnitureHidden(hidden, 'chair-1', false);
+
+    expect(hidden.furniture[0]).toMatchObject({ id: 'chair-1', hidden: true });
+    expect(restored.furniture[0]).toMatchObject({ id: 'chair-1', hidden: false });
+    expect(project.furniture[0].hidden).toBe(false);
+    expect(() => setFurnitureHidden(project, 'missing', true)).toThrow(/unknown furniture/);
+  });
+
   it('migrates saved furniture without an elevation field to floor level', () => {
     const project = addFurniture(createStarterProject(), furniture);
-    const { elevation: _elevation, rotationX: _rotationX, rotationZ: _rotationZ, ...legacyFurniture } = project.furniture[0];
+    const { elevation: _elevation, rotationX: _rotationX, rotationZ: _rotationZ, hidden: _hidden, ...legacyFurniture } = project.furniture[0];
     const migrated = normalizeProject({ ...project, furniture: [legacyFurniture] });
 
-    expect(migrated.furniture[0]).toMatchObject({ elevation: 0, rotationX: 0, rotationZ: 0 });
+    expect(migrated.furniture[0]).toMatchObject({ elevation: 0, rotationX: 0, rotationZ: 0, hidden: false });
   });
 
   it('duplicates furniture with a fresh ID and a small placement offset', () => {
@@ -161,6 +174,30 @@ describe('domain model', () => {
       position: { x: 1.35, y: 1.35 }, roomId: 'room-starter',
     });
     expect(project.furniture).toHaveLength(1);
+  });
+
+  it('creates an evenly spaced furniture array in one immutable project update', () => {
+    const project = addFurniture(createStarterProject(), furniture);
+    const result = arrayFurniture(project, 'chair-1', 3, { x: 0.8, y: -0.25 });
+
+    expect(result.furniture).toHaveLength(4);
+    expect(result.furniture.slice(1).map((item) => item.position)).toEqual([
+      { x: 1.8, y: 0.75 },
+      { x: 2.6, y: 0.5 },
+      { x: 3.4000000000000004, y: 0.25 },
+    ]);
+    expect(result.furniture.slice(1).map((item) => item.id)).toEqual(['furniture-1', 'furniture-2', 'furniture-3']);
+    expect(result.furniture[3]).toMatchObject({ width: 0.6, depth: 0.6, height: 0.9, roomId: 'room-starter' });
+    expect(project.furniture).toHaveLength(1);
+  });
+
+  it('rejects invalid furniture array counts, offsets, and IDs', () => {
+    const project = addFurniture(createStarterProject(), furniture);
+    expect(() => arrayFurniture(project, 'chair-1', 0, { x: 1, y: 0 })).toThrow(/integer from 1 to 100/);
+    expect(() => arrayFurniture(project, 'chair-1', 1.5, { x: 1, y: 0 })).toThrow(/integer from 1 to 100/);
+    expect(() => arrayFurniture(project, 'chair-1', 101, { x: 1, y: 0 })).toThrow(/integer from 1 to 100/);
+    expect(() => arrayFurniture(project, 'chair-1', 2, { x: 0, y: 0 })).toThrow(/must move/);
+    expect(() => arrayFurniture(project, 'missing', 2, { x: 1, y: 0 })).toThrow(/unknown furniture/);
   });
 
   it('removes only the selected furniture or wall', () => {

@@ -220,6 +220,7 @@ export function addFurniture(project: DesignProject, furniture: FurnitureInput):
     position: point(furniture.position, 'furniture position'),
     rotationX: furniture.rotationX ?? 0,
     rotationZ: furniture.rotationZ ?? 0,
+    hidden: furniture.hidden ?? false,
   });
   id(instance.id, 'furniture id');
   if (project.furniture.some((item) => item.id === instance.id)) throw new RangeError(`duplicate furniture id: ${instance.id}`);
@@ -295,6 +296,30 @@ export function duplicateFurniture(project: DesignProject, furnitureId: string):
   return copyProject(project, { furniture: [...project.furniture, duplicate] });
 }
 
+export function arrayFurniture(project: DesignProject, furnitureId: string, copies: number, offset: Point): DesignProject {
+  id(furnitureId, 'furniture id');
+  if (!Number.isInteger(copies) || copies < 1 || copies > 100) throw new RangeError('array copies must be an integer from 1 to 100');
+  const delta = point(offset, 'array offset');
+  if (delta.x === 0 && delta.y === 0) throw new RangeError('array offset must move each copy');
+  const source = project.furniture.find((item) => item.id === furnitureId);
+  if (!source) throw new RangeError(`unknown furniture: ${furnitureId}`);
+  const usedIds = new Set(project.furniture.map((item) => item.id));
+  let suffix = 1;
+  const created = Array.from({ length: copies }, (_, index) => {
+    let nextId = `furniture-${suffix}`;
+    while (usedIds.has(nextId)) nextId = `furniture-${++suffix}`;
+    usedIds.add(nextId);
+    suffix += 1;
+    return freeze({
+      ...source,
+      id: nextId,
+      name: `${source.name} ${index + 2}`,
+      position: point({ x: source.position.x + delta.x * (index + 1), y: source.position.y + delta.y * (index + 1) }, 'array position'),
+    });
+  });
+  return copyProject(project, { furniture: [...project.furniture, ...created] });
+}
+
 export function removeFurniture(project: DesignProject, furnitureId: string): DesignProject {
   id(furnitureId, 'furniture id');
   if (!project.furniture.some((item) => item.id === furnitureId)) throw new RangeError(`unknown furniture: ${furnitureId}`);
@@ -305,6 +330,15 @@ export function removeWall(project: DesignProject, wallId: string): DesignProjec
   id(wallId, 'wall id');
   if (!project.walls.some((wall) => wall.id === wallId)) throw new RangeError(`unknown wall: ${wallId}`);
   return copyProject(project, { walls: project.walls.filter((wall) => wall.id !== wallId) });
+}
+
+export function setFurnitureHidden(project: DesignProject, furnitureId: string, hidden: boolean): DesignProject {
+  id(furnitureId, 'furniture id');
+  if (typeof hidden !== 'boolean') throw new TypeError('hidden must be a boolean');
+  if (!project.furniture.some((item) => item.id === furnitureId)) throw new RangeError(`unknown furniture: ${furnitureId}`);
+  return copyProject(project, {
+    furniture: project.furniture.map((item) => item.id === furnitureId ? freeze({ ...item, hidden }) : item),
+  });
 }
 
 export function splitWall(project: DesignProject, wallId: string, ratio = 0.5): DesignProject {
@@ -370,7 +404,7 @@ export function normalizeProject(value: unknown): DesignProject {
     const elevation = Number.isFinite(raw.elevation) ? Number(raw.elevation) : 0;
     const rotationX = Number.isFinite(raw.rotationX) ? Number(raw.rotationX) : 0;
     const rotationZ = Number.isFinite(raw.rotationZ) ? Number(raw.rotationZ) : 0;
-    return freeze({ ...item, elevation, rotationX, rotationZ, levelId: levelFor(item) });
+    return freeze({ ...item, elevation, rotationX, rotationZ, hidden: raw.hidden === true, levelId: levelFor(item) });
   }) as FurnitureInstance[];
   const materials = candidate.materials.map((item) => copyMaterial(item as Material));
   const units = candidate.units === 'ft' ? 'ft' : 'm';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createStarterProject } from './model';
+import { addFurniture, createStarterProject } from './model';
 import { frameProjectCamera } from './camera';
 
 describe('project camera framing', () => {
@@ -19,5 +19,16 @@ describe('project camera framing', () => {
     const narrow = frameProjectCamera(project, 0.6);
 
     expect(narrow.radius).toBeGreaterThan(wide.radius);
+  });
+
+  it('does not let hidden furniture change the Fit view frame', () => {
+    const project = createStarterProject();
+    const withHiddenObject = addFurniture(project, {
+      assetId: 'placeholder-chair', name: 'Hidden Chair', position: { x: 100, y: 100 },
+      rotation: 0, width: 1, depth: 1, height: 1, elevation: 0, color: '#777777',
+      levelId: project.activeLevelId, hidden: true,
+    });
+
+    expect(frameProjectCamera(withHiddenObject, 1280 / 649)).toEqual(frameProjectCamera(project, 1280 / 649));
   });
 });

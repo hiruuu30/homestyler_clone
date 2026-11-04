@@ -117,7 +117,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       ).castShadow = true;
     });
 
-    project.furniture.forEach((item) => {
+    project.furniture.filter((item) => !item.hidden).forEach((item) => {
       const mesh = addBox(scene, [item.width, item.height, item.depth], [item.position.x, floorElevation + item.elevation + item.height / 2, -item.position.y], item.color || '#a78362', item.id, item.rotation, item.rotationX, item.rotationZ);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
