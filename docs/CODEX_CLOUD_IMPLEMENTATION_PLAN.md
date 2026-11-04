@@ -1,10 +1,14 @@
 # Codex Cloud implementation plan: independent Homestyler-like room planner
 
-**Status:** planning handoff only. This document does not claim that implementation, parity, or deployment exists.
+**Status:** planning handoff only. This document does not claim that implementation, parity, or deployment exists. **The user has fixed strict full functional and pixel-level visual parity as the required scope and rejected a narrower build. Do not start application implementation or deploy until an evidence-backed feasibility gate demonstrates that this scope can be supported.**
 
 ## 1. Mission and delivery rule
 
-Build an independent, complete room-planning application with the requested full functional and visual parity target. Do not substitute a downsized MVP, screenshot mockup, inert toolbar, or placeholder deployment. “Free” means no subscription gates in the new application; it does not mean that compute, storage, rendering, AI inference, or a large asset catalog has zero operating cost. Do not bypass Homestyler gates, copy Homestyler proprietary code or assets, reuse private service endpoints, or represent an intermediate phase as a complete clone.
+Build an independent, complete room-planning application with the requested full functional and visual parity target—but only after the feasibility gate below passes. Until then, restrict work to evidence gathering and planning; do not create a partial application, prototype, screenshot mockup, inert toolbar, or deployment. Do not substitute a reduced scope. “Free” means no subscription gates in the new application; it does not mean that compute, storage, rendering, AI inference, or a large asset catalog has zero operating cost. Do not bypass Homestyler gates, copy Homestyler proprietary code or assets, reuse private service endpoints, or represent an intermediate phase as a complete clone.
+
+### Mandatory pre-build feasibility gate
+
+Before any app source or deployment is created, provide evidence that the strict full-parity target is supportable: a sufficiently broad authorized reference inventory; a finite feature/state acceptance matrix; a demonstrated technical approach for every required capability; legal and operational sources for equivalent assets and services; and the browsers, infrastructure, and test fixtures needed to validate behavior and pixel-level rendering. Confirm that the zero-subscription requirement can be met without silently dropping features. If evidence is insufficient or any material scope remains unsupported, stop at research/planning, document the blocker, and do not implement or deploy. Passing this gate permits work to begin; it is not itself evidence that final parity has been achieved.
 
 The implementation must use independently authored code, independently owned or compatible-license assets, and documented open interfaces. No credentials, cookies, tokens, or private account data belong in source control or environment examples.
 
@@ -23,7 +27,7 @@ The implementation must use independently authored code, independently owned or 
 
 ### Proposed design, not recovered internals
 
-The architecture, schema, geometry algorithms, renderer choices, APIs, and milestones below are engineering choices for a new product. They are not claims about Homestyler’s internal implementation. Browser observability cannot recover server internals, proprietary catalog data, hidden feature flags, paid modules, or guarantee exhaustive feature discovery. Continue the now-working authorized reference investigation, add evidence to the ledger, and freeze version/viewport/DPR/locale/font/catalog/project state before attempting pixel comparisons. A pending scope question does not authorize a narrower substitute until answered.
+The architecture, schema, geometry algorithms, renderer choices, APIs, and milestones below are proposals, not claims about Homestyler’s internals or proof of feasibility. Browser observability cannot recover server internals, proprietary catalog data, hidden feature flags, paid modules, or guarantee exhaustive feature discovery. Continue authorized evidence gathering, add findings to the ledger, and freeze version/viewport/DPR/locale/font/catalog/project state before comparisons. User scope is resolved: strict full parity only; there is no authorization for a narrower substitute. Do not proceed from proposal into app implementation unless the mandatory pre-build feasibility gate passes.
 
 ## 3. Scope inventory to preserve in the ledger
 
@@ -110,7 +114,7 @@ No phase may be called a complete clone until every ledger row is either accepte
 
 ## 10. Staged implementation order (without reducing final scope)
 
-1. **Phase 0 — evidence and scope freeze:** verify runtime/dependencies, continue capture in the working authorized editor, expand the finite ledger, resolve manual-drawing/material/advanced unknowns, define golden-image and behavior fixtures, and obtain any scope decisions. Startup is no longer the current blocker. Do not invent controls from assumptions.
+1. **Phase 0 — evidence and scope/feasibility gate:** verify runtime/dependencies, continue capture in the working authorized editor, expand the finite ledger, resolve manual-drawing/material/advanced unknowns, define golden-image and behavior fixtures, and establish legal/technical/operational support for the complete scope. Startup is no longer the current blocker. Do not invent controls from assumptions. No app implementation or deployment is permitted unless this gate demonstrates that full parity can be supported; otherwise stop and report blockers.
 2. **Phase 1 — shell and domain foundation:** implement editor chrome, routes, panels, commands, canonical schema, migrations, selection/navigation state, accessibility, error/loading states, and local project lifecycle. Gate on state-matched UI evidence and no inert controls.
 3. **Phase 2 — complete plan geometry:** implement planar graph, rooms, dimensions, walls, joins, snapping, openings, multi-level foundations, undo/redo, worker processing, and serialization fixtures. Gate on geometry/property tests and exact numeric behavior.
 4. **Phase 3 — linked 3D and object workflows:** derive meshes from the model; add levels, slabs, ceilings, doors/windows, furniture transforms, collision/hosting, cameras, plan/RCP/elevation/3D/roam synchronization. Gate on cross-view consistency.
