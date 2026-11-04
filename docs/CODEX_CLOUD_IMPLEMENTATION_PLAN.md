@@ -1,6 +1,6 @@
 # Codex Cloud implementation plan: independent Homestyler-like room planner
 
-**Status:** the incomplete generic prototype release is authorized under the user's latest direction to defer catalog assets and continue other features. Commit `c2c0364d1390eb29bbf1a4b5e706c814bd3bac29` is pushed to `hiruuu30/homestyler_clone` main; production deployment to Vercel project `homestyler-clone` under team `hiroo1` is READY for that commit at `https://homestyler-clone.vercel.app/`. Public HTTP and basic 2D/3D load checks passed; these do not establish parity. Strict full functional and pixel-level parity remains the final acceptance target.
+**Status:** the incomplete generic prototype release is authorized under the user's latest direction to defer catalog assets and continue other features. Feature commit `1fb9e9b` is pushed to `hiruuu30/homestyler_clone` main; `https://homestyler-clone.vercel.app/` returns HTTP 200 and serves the matching freshly built JavaScript bundle with wall-split and endpoint-snap features. This is a deployment smoke check only. Strict full functional and pixel-level parity remains 0% verified, and original catalog coverage remains 0%.
 
 ## 1. Mission and delivery rule
 
