@@ -13,6 +13,8 @@ import {
   createWall,
   convertProjectUnits,
   duplicateFurniture,
+  findJoinableWall,
+  joinCollinearWalls,
   moveFurniture,
   normalizeProject,
   removeLevel,
@@ -480,6 +482,61 @@ describe('domain model', () => {
     const legacyOverlap = { ...base, walls: [host, overlap], rooms: [] };
     expect(() => repairWallTopology(legacyOverlap)).toThrow(/cannot overlap/);
     expect(legacyOverlap.walls).toEqual([host, overlap]);
+  });
+
+  it('joins compatible reversed collinear walls, rebases openings, and removes a straight room vertex', () => {
+    const base = createStarterProject();
+    const left = createWall('left', { x: 0, y: 0 }, { x: 2, y: 0 }, 0.2, 2.8, 'brick');
+    const right = createWall('right', { x: 4, y: 0 }, { x: 2, y: 0 }, 0.2, 2.8, 'brick');
+    const room = createPolygonRoom('room-joined', 'Joined room', [
+      { x: 0, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 },
+    ]);
+    let project: ReturnType<typeof createStarterProject> = { ...base, walls: [left, right], rooms: [room] };
+    project = addWallOpening(project, 'left', 'window');
+    project = addWallOpening(project, 'right', 'window');
+
+    expect(findJoinableWall(project, 'left')).toBe('right');
+    const joined = joinCollinearWalls(project, 'left', 'right');
+    expect(joined.walls).toHaveLength(1);
+    expect(joined.walls[0]).toMatchObject({ id: 'left', start: { x: 0, y: 0 }, end: { x: 4, y: 0 }, thickness: 0.2, height: 2.8, materialId: 'brick' });
+    expect(joined.wallOpenings).toHaveLength(2);
+    expect(joined.wallOpenings.map((opening) => opening.wallId)).toEqual(['left', 'left']);
+    expect(joined.wallOpenings.map((opening) => opening.center)).toEqual([1, 3]);
+    expect(joined.rooms[0].points).toEqual([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 }]);
+    expect(roomArea(joined.rooms[0])).toBe(8);
+    expect(project.walls).toEqual([left, right]);
+    expect(project.rooms[0].points).toHaveLength(5);
+    expect(findJoinableWall(joined, 'left')).toBeNull();
+
+    const selectedStartsAtJoin = createWall('selected-start', { x: 2, y: 0 }, { x: 4, y: 0 });
+    const previous = createWall('previous', { x: 0, y: 0 }, { x: 2, y: 0 });
+    const joinedAtStart = joinCollinearWalls({ ...base, walls: [selectedStartsAtJoin, previous], rooms: [] }, 'selected-start', 'previous');
+    expect(joinedAtStart.walls[0]).toMatchObject({ id: 'selected-start', start: { x: 0, y: 0 }, end: { x: 4, y: 0 } });
+  });
+
+  it('rejects joins across incompatible properties, branches, floors, or ambiguous neighbors', () => {
+    const base = createStarterProject();
+    const selected = createWall('selected', { x: 0, y: 0 }, { x: 2, y: 0 });
+    const wrongHeight = createWall('wrong-height', { x: 2, y: 0 }, { x: 4, y: 0 }, undefined, 3.2);
+    const incompatible = { ...base, walls: [selected, wrongHeight], rooms: [] };
+    expect(findJoinableWall(incompatible, 'selected')).toBeNull();
+    expect(() => joinCollinearWalls(incompatible, 'selected', 'wrong-height')).toThrow(/compatible, collinear/);
+
+    const neighbor = createWall('neighbor', { x: 4, y: 0 }, { x: 2, y: 0 });
+    const branch = createWall('branch', { x: 2, y: 2 }, { x: 2, y: 0 });
+    const branched = { ...base, walls: [selected, neighbor, branch], rooms: [] };
+    expect(findJoinableWall(branched, 'selected')).toBeNull();
+    expect(() => joinCollinearWalls(branched, 'selected', 'neighbor')).toThrow(/unbranched endpoint/);
+
+    const opposite = createWall('opposite', { x: -2, y: 0 }, { x: 0, y: 0 });
+    const after = createWall('after', { x: 2, y: 0 }, { x: 4, y: 0 });
+    const ambiguous = { ...base, walls: [selected, opposite, after], rooms: [] };
+    expect(findJoinableWall(ambiguous, 'selected')).toBeNull();
+
+    const upstairs = createWall('upstairs', { x: 2, y: 0 }, { x: 4, y: 0 }, undefined, undefined, undefined, 'floor-upper');
+    const separateFloors = { ...base, walls: [selected, upstairs], rooms: [] };
+    expect(findJoinableWall(separateFloors, 'selected')).toBeNull();
+    expect(() => joinCollinearWalls(separateFloors, 'selected', 'upstairs')).toThrow(/compatible, collinear/);
   });
 
   it('rejects a connected-node edit that collapses a room edge or invalidates a hosted opening', () => {

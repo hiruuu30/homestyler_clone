@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Building2, Check, ChevronDown, ChevronRight, CircleHelp, Copy, Download,
+  Building2, Check, ChevronDown, ChevronRight, CircleHelp, Copy, Download, GitMerge,
   Eye, EyeOff, FilePlus2, Grid2X2, Layers3, Maximize2, MousePointer2, PaintBucket, PanelLeftClose,
   PenTool, Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
 } from 'lucide-react';
@@ -8,7 +8,7 @@ import {
   addFurniture, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removePlanUnderlay, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening,
-  repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
+  findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, Point, ToolMode } from './domain/types';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './export/deliverables';
@@ -77,6 +77,7 @@ export default function App() {
   }), [project, activeLevelId]);
   const selectedRoom = visibleProject.rooms.find((item) => item.id === selectedId) ?? null;
   const selectedWall = visibleProject.walls.find((item) => item.id === selectedId) ?? null;
+  const joinableWallId = selectedWall ? findJoinableWall(project, selectedWall.id) : null;
   const selectedFurniture = visibleProject.furniture.find((item) => item.id === selectedId) ?? null;
   const selectedOpening = visibleProject.wallOpenings.find((item) => item.id === selectedId) ?? null;
   const area = useMemo(() => visibleProject.rooms.reduce((sum, room) => sum + roomArea(room), 0), [visibleProject.rooms]);
@@ -235,6 +236,15 @@ export default function App() {
     if (!selectedWall) return;
     commit(splitProjectWall(project, selectedWall.id));
     notify('Wall split at midpoint · Undo to restore');
+  }
+  function joinSelectedWall() {
+    if (!selectedWall || !joinableWallId) return;
+    try {
+      commit(joinCollinearWalls(project, selectedWall.id, joinableWallId));
+      notify('Collinear wall joined · Undo to restore');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not join this wall');
+    }
   }
   function createSelectedWallOpening(kind: 'door' | 'window') {
     if (!selectedWall) { notify('Select a wall first, then add its door or window'); return; }
@@ -594,6 +604,7 @@ export default function App() {
               <NumericField label="Wall height" value={selectedWall.height} unit={lengthUnit} min={0.1 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateWallHeight(project, selectedWall.id, value))} />
               <NumericField label="Thickness" value={selectedWall.thickness} unit={lengthUnit} min={0.05 * metresToProjectUnits} step={0.01 * metresToProjectUnits} onCommit={(value) => commit(updateWallThickness(project, selectedWall.id, value))} />
               <button className="rotate-btn" onClick={splitSelectedWall}><Scissors size={14} /> Split wall at midpoint</button>
+              {joinableWallId && <button className="rotate-btn" onClick={joinSelectedWall}><GitMerge size={14} /> Join collinear wall</button>}
               <button className="rotate-btn danger-action wall-delete" onClick={deleteSelected}><Trash2 size={14} /> Delete wall</button>
             </div></section>
           </div>}

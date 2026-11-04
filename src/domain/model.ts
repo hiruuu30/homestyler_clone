@@ -548,6 +548,107 @@ export function repairWallTopology(project: DesignProject): DesignProject {
   return copyProject(next, changedRooms ? { rooms } : {});
 }
 
+type CollinearWallJoin = Readonly<{ junction: Point; neighborOuter: Point }>;
+
+function collinearWallJoin(project: DesignProject, selected: Wall, neighbor: Wall): CollinearWallJoin | null {
+  if (selected.id === neighbor.id || selected.levelId !== neighbor.levelId
+    || Math.abs(selected.thickness - neighbor.thickness) > 1e-9
+    || Math.abs(selected.height - neighbor.height) > 1e-9
+    || selected.materialId !== neighbor.materialId) return null;
+  const samePoint = (left: Point, right: Point) => left.x === right.x && left.y === right.y;
+  const shared = [selected.start, selected.end].filter((candidate) => samePoint(candidate, neighbor.start) || samePoint(candidate, neighbor.end));
+  if (shared.length !== 1) return null;
+  const junction = shared[0];
+  const selectedOuter = samePoint(junction, selected.start) ? selected.end : selected.start;
+  const neighborOuter = samePoint(junction, neighbor.start) ? neighbor.end : neighbor.start;
+  const selectedX = selectedOuter.x - junction.x;
+  const selectedY = selectedOuter.y - junction.y;
+  const neighborX = neighborOuter.x - junction.x;
+  const neighborY = neighborOuter.y - junction.y;
+  const selectedLength = Math.hypot(selectedX, selectedY);
+  const neighborLength = Math.hypot(neighborX, neighborY);
+  const determinant = selectedX * neighborY - selectedY * neighborX;
+  if (Math.abs(determinant) > 1e-9 * selectedLength * neighborLength
+    || selectedX * neighborX + selectedY * neighborY >= 0) return null;
+  const hasThirdConnection = project.walls.some((wall) => {
+    if (wall.id === selected.id || wall.id === neighbor.id || wall.levelId !== selected.levelId) return false;
+    return samePoint(junction, wall.start) || samePoint(junction, wall.end)
+      || segmentFraction(junction, wall.start, wall.end) !== null;
+  });
+  if (hasThirdConnection) return null;
+  return { junction, neighborOuter };
+}
+
+/** Return the only safe contiguous wall candidate, or null when none or several are available. */
+export function findJoinableWall(project: DesignProject, wallId: string): string | null {
+  id(wallId, 'wall id');
+  const selected = project.walls.find((wall) => wall.id === wallId);
+  if (!selected) throw new RangeError(`unknown wall: ${wallId}`);
+  const candidates = project.walls.filter((neighbor) => collinearWallJoin(project, selected, neighbor) !== null);
+  return candidates.length === 1 ? candidates[0].id : null;
+}
+
+/** Merge two compatible, contiguous collinear walls while preserving openings and room shape. */
+export function joinCollinearWalls(project: DesignProject, wallId: string, neighborId: string): DesignProject {
+  id(wallId, 'wall id');
+  id(neighborId, 'neighbor wall id');
+  const selected = project.walls.find((wall) => wall.id === wallId);
+  const neighbor = project.walls.find((wall) => wall.id === neighborId);
+  if (!selected) throw new RangeError(`unknown wall: ${wallId}`);
+  if (!neighbor) throw new RangeError(`unknown wall: ${neighborId}`);
+  const join = collinearWallJoin(project, selected, neighbor);
+  if (!join) throw new RangeError('walls must be compatible, collinear, and meet at an unbranched endpoint');
+
+  const start = join.junction.x === selected.end.x && join.junction.y === selected.end.y ? selected.start : join.neighborOuter;
+  const end = join.junction.x === selected.end.x && join.junction.y === selected.end.y ? join.neighborOuter : selected.end;
+  const mergedWall: Wall = freeze({ ...selected, start, end });
+  const mergedLength = Math.hypot(end.x - start.x, end.y - start.y);
+  const directionX = (end.x - start.x) / mergedLength;
+  const directionY = (end.y - start.y) / mergedLength;
+  const openingWorldPoint = (host: Wall, center: number): Point => {
+    const hostLength = Math.hypot(host.end.x - host.start.x, host.end.y - host.start.y);
+    return {
+      x: host.start.x + (host.end.x - host.start.x) * center / hostLength,
+      y: host.start.y + (host.end.y - host.start.y) * center / hostLength,
+    };
+  };
+  const remainingOpenings = project.wallOpenings.filter((opening) => opening.wallId !== selected.id && opening.wallId !== neighbor.id);
+  const migratedOpenings = project.wallOpenings
+    .filter((opening) => opening.wallId === selected.id || opening.wallId === neighbor.id)
+    .map((opening) => {
+      const host = opening.wallId === selected.id ? selected : neighbor;
+      const world = openingWorldPoint(host, opening.center);
+      const center = (world.x - start.x) * directionX + (world.y - start.y) * directionY;
+      return freeze({ ...opening, wallId: selected.id, center });
+    });
+  migratedOpenings.forEach((opening, index) => {
+    validateOpening(mergedWall, opening);
+    assertNoOpeningOverlap([...remainingOpenings, ...migratedOpenings.slice(0, index)], opening);
+  });
+
+  const samePoint = (left: Point, right: Point) => left.x === right.x && left.y === right.y;
+  const rooms = project.rooms.map((room) => {
+    if (room.levelId !== selected.levelId) return room;
+    const index = room.points.findIndex((vertex) => samePoint(vertex, join.junction));
+    if (index < 0) return room;
+    const previous = room.points[(index + room.points.length - 1) % room.points.length];
+    const next = room.points[(index + 1) % room.points.length];
+    const incomingX = join.junction.x - previous.x;
+    const incomingY = join.junction.y - previous.y;
+    const outgoingX = next.x - join.junction.x;
+    const outgoingY = next.y - join.junction.y;
+    const straight = Math.abs(incomingX * outgoingY - incomingY * outgoingX)
+      <= 1e-9 * Math.hypot(incomingX, incomingY) * Math.hypot(outgoingX, outgoingY)
+      && incomingX * outgoingX + incomingY * outgoingY > 0;
+    if (!straight) return room;
+    const points = room.points.filter((_, vertexIndex) => vertexIndex !== index);
+    const validated = createPolygonRoom(room.id, room.name, points, room.floorMaterialId, room.levelId, project.units);
+    return freeze({ ...room, points: validated.points });
+  });
+  const walls = project.walls.flatMap((wall) => wall.id === selected.id ? [mergedWall] : wall.id === neighbor.id ? [] : [wall]);
+  return copyProject(project, { walls, wallOpenings: [...remainingOpenings, ...migratedOpenings], rooms });
+}
+
 export function addWallOpening(project: DesignProject, wallId: string, kind: WallOpeningKind): DesignProject {
   id(wallId, 'wall id');
   if (kind !== 'door' && kind !== 'window') throw new TypeError('opening kind must be door or window');
