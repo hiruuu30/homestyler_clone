@@ -1,6 +1,6 @@
 # Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The latest local milestone adds generic whole-wall finish assignment from the existing swatches, rendered in plan/3D and SVG exports. The public production alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); the feature ledger records the verified code revision and bundle evidence. This is not a complete clone or a parity claim. Original catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The latest incremental milestone adds generic whole-wall finish assignment from the existing swatches, rendered in plan/3D and SVG exports. The public production alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); the feature ledger records the verified code revision and bundle evidence. This is not a complete clone or a parity claim. Original catalog assets remain deferred.
 
 ## Current milestone: whole-wall finish assignment
 
