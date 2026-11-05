@@ -7,6 +7,50 @@ export type WallSolidSegment = Readonly<{
   top: number;
 }>;
 
+export type OpeningInterval = Readonly<{ start: number; end: number }>;
+
+/** Resize one end of an opening while keeping its opposite end fixed. */
+export function resizeOpeningFromEdge(
+  opening: Readonly<{ center: number; width: number }>,
+  wallLength: number,
+  side: 'left' | 'right',
+  delta: number,
+  minimumWidth: number,
+  blockers: readonly OpeningInterval[] = [],
+): Readonly<{ center: number; width: number }> {
+  if (!Number.isFinite(wallLength) || wallLength <= 0) throw new RangeError('wall length must be positive and finite');
+  if (!Number.isFinite(opening.center) || !Number.isFinite(opening.width) || opening.width <= 0
+    || opening.center - opening.width / 2 < 0 || opening.center + opening.width / 2 > wallLength) {
+    throw new RangeError('opening must have valid bounds within the wall');
+  }
+  if (!Number.isFinite(delta)) throw new TypeError('resize delta must be finite');
+  if (!Number.isFinite(minimumWidth) || minimumWidth <= 0 || minimumWidth > opening.width) {
+    throw new RangeError('minimum width must be positive and no wider than the opening');
+  }
+  if (side !== 'left' && side !== 'right') throw new TypeError('resize side must be left or right');
+
+  const fixedEdge = side === 'left'
+    ? opening.center + opening.width / 2
+    : opening.center - opening.width / 2;
+  const currentEdge = side === 'left'
+    ? opening.center - opening.width / 2
+    : opening.center + opening.width / 2;
+  let lower = side === 'left' ? 0 : fixedEdge + minimumWidth;
+  let upper = side === 'left' ? fixedEdge - minimumWidth : wallLength;
+
+  for (const blocker of blockers) {
+    if (!Number.isFinite(blocker.start) || !Number.isFinite(blocker.end) || blocker.end <= blocker.start) {
+      throw new RangeError('blocking opening interval must have finite positive bounds');
+    }
+    if (side === 'left' && blocker.end <= fixedEdge + 1e-9 && blocker.end > lower) lower = blocker.end;
+    if (side === 'right' && blocker.start >= fixedEdge - 1e-9 && blocker.start < upper) upper = blocker.start;
+  }
+
+  if (lower > upper) throw new RangeError('no clear wall span is available for resizing this opening');
+  const edge = Math.max(lower, Math.min(upper, currentEdge + delta));
+  return Object.freeze({ center: (edge + fixedEdge) / 2, width: Math.abs(edge - fixedEdge) });
+}
+
 /** Decompose one wall face into non-overlapping solid rectangles around hosted openings. */
 export function wallSolidSegments(length: number, height: number, openings: readonly WallOpening[]): WallSolidSegment[] {
   if (!Number.isFinite(length) || length <= 0 || !Number.isFinite(height) || height <= 0) {

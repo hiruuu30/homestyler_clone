@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { snapPlanPoint } from '../domain/snapping';
 import type { DesignProject, FurnitureInstance, Point, ToolMode } from '../domain/types';
 import { floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
+import { resizeOpeningFromEdge } from '../domain/wall-openings';
 
 export type PlanCanvasProps = {
   project: DesignProject;
@@ -15,6 +16,7 @@ export type PlanCanvasProps = {
   onCreateWall: (start: Point, end: Point) => void;
   onMoveFurniture: (id: string, position: Point) => void;
   onMoveOpening: (id: string, center: number) => void;
+  onResizeOpening: (id: string, center: number, width: number) => void;
   fitRequest: number;
 };
 
@@ -24,6 +26,7 @@ type DragState =
   | { mode: 'create'; start: Point; current: Point }
   | { mode: 'move'; start: Point; current: Point; furnitureId: string; origin: Point }
   | { mode: 'move-opening'; start: Point; current: Point; openingId: string; originCenter: number; width: number; wallStart: Point; wallEnd: Point }
+  | { mode: 'resize-opening'; start: Point; current: Point; openingId: string; originCenter: number; originWidth: number; wallStart: Point; wallEnd: Point; wallLength: number; side: 'left' | 'right'; minimumWidth: number; blockers: readonly { start: number; end: number }[] }
   | { mode: 'pan'; pointerStart: Point; origin: CameraBox };
 
 const GRID_SIZE = 1;
@@ -72,7 +75,21 @@ function draggedOpeningCenter(drag: Extract<DragState, { mode: 'move-opening' }>
   return Math.max(drag.width / 2, Math.min(length - drag.width / 2, drag.originCenter + projectedDelta));
 }
 
-export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, onCreatePolygonRoom, onCreateRoomHole, onCreateWall, onMoveFurniture, onMoveOpening, fitRequest }: PlanCanvasProps) {
+function resizePreview(drag: Extract<DragState, { mode: 'resize-opening' }>, point: Point): Readonly<{ center: number; width: number }> {
+  const dx = drag.wallEnd.x - drag.wallStart.x;
+  const dy = drag.wallEnd.y - drag.wallStart.y;
+  const projectedDelta = ((point.x - drag.start.x) * dx + (point.y - drag.start.y) * dy) / drag.wallLength;
+  return resizeOpeningFromEdge(
+    { center: drag.originCenter, width: drag.originWidth },
+    drag.wallLength,
+    drag.side,
+    projectedDelta,
+    drag.minimumWidth,
+    drag.blockers,
+  );
+}
+
+export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, onCreatePolygonRoom, onCreateRoomHole, onCreateWall, onMoveFurniture, onMoveOpening, onResizeOpening, fitRequest }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [polygonPoints, setPolygonPoints] = useState<Point[]>([]);
@@ -147,6 +164,47 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       wallStart: wall.start,
       wallEnd: wall.end,
     });
+  };
+
+  const openingBlockers = (opening: DesignProject['wallOpenings'][number]) => project.wallOpenings
+    .filter((other) => other.wallId === opening.wallId && other.id !== opening.id)
+    .filter((other) => opening.sillHeight < other.sillHeight + other.height - 1e-9
+      && opening.sillHeight + opening.height > other.sillHeight + 1e-9)
+    .map((other) => ({ start: other.center - other.width / 2, end: other.center + other.width / 2 }));
+
+  const beginOpeningResize = (
+    event: ReactPointerEvent<SVGElement>,
+    opening: DesignProject['wallOpenings'][number],
+    wall: DesignProject['walls'][number],
+    side: 'left' | 'right',
+  ) => {
+    event.stopPropagation();
+    onSelect(opening.id);
+    if (tool !== 'select') return;
+    const start = modelPoint(event.clientX, event.clientY);
+    if (!start) return;
+    const wallLength = distance(wall.start, wall.end);
+    const minimumWidth = Math.min(0.2 * unitsPerMetre, opening.width);
+    capture(event);
+    setDrag({ mode: 'resize-opening', start, current: start, openingId: opening.id, originCenter: opening.center,
+      originWidth: opening.width, wallStart: wall.start, wallEnd: wall.end, wallLength, side, minimumWidth,
+      blockers: openingBlockers(opening) });
+  };
+
+  const keyboardResizeOpening = (
+    event: ReactKeyboardEvent<SVGRectElement>,
+    opening: DesignProject['wallOpenings'][number],
+    wall: DesignProject['walls'][number],
+    side: 'left' | 'right',
+  ) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    event.stopPropagation();
+    const step = 0.05 * unitsPerMetre;
+    const delta = event.key === 'ArrowRight' ? (side === 'right' ? step : -step) : (side === 'left' ? -step : step);
+    const resized = resizeOpeningFromEdge({ center: opening.center, width: opening.width }, distance(wall.start, wall.end), side,
+      delta, Math.min(0.2 * unitsPerMetre, opening.width), openingBlockers(opening));
+    onResizeOpening(opening.id, resized.center, resized.width);
   };
 
   const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -237,6 +295,12 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
     } else if (drag.mode === 'move-opening') {
       const center = draggedOpeningCenter(drag, end);
       if (Math.abs(center - drag.originCenter) > 0.05 * unitsPerMetre) onMoveOpening(drag.openingId, center);
+    } else if (drag.mode === 'resize-opening') {
+      const resized = resizePreview(drag, end);
+      if (Math.abs(resized.center - drag.originCenter) > 0.025 * unitsPerMetre
+        || Math.abs(resized.width - drag.originWidth) > 0.05 * unitsPerMetre) {
+        onResizeOpening(drag.openingId, resized.center, resized.width);
+      }
     }
     setDrag(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
@@ -364,11 +428,13 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
         const dy = wall.end.y - wall.start.y;
         const length = Math.hypot(dx, dy);
         const openingDrag = drag?.mode === 'move-opening' && drag.openingId === opening.id ? drag : null;
-        const center = openingDrag ? draggedOpeningCenter(openingDrag, openingDrag.current) : opening.center;
+        const openingResize = drag?.mode === 'resize-opening' && drag.openingId === opening.id ? drag : null;
+        const resized = openingResize ? resizePreview(openingResize, openingResize.current) : { center: opening.center, width: opening.width };
+        const center = openingDrag ? draggedOpeningCenter(openingDrag, openingDrag.current) : resized.center;
         const centerX = wall.start.x + (dx / length) * center;
         const centerY = wall.start.y + (dy / length) * center;
         const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        const half = opening.width / 2;
+        const half = resized.width / 2;
         const selected = selectedId === opening.id;
         return (
           <g
@@ -377,15 +443,22 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
             transform={`translate(${centerX} ${centerY}) rotate(${angle})`}
             data-opening-id={opening.id}
             role="button"
-            aria-label={`${opening.kind} opening, ${opening.width.toFixed(2)} ${project.units} wide; drag to move along wall`}
+            aria-label={`${opening.kind} opening, ${resized.width.toFixed(2)} ${project.units} wide; drag to move along wall`}
             onPointerDown={(event) => beginOpeningDrag(event, opening, wall)}
           >
-            <rect x={-half} y={-wall.thickness / 2 - 0.025} width={opening.width} height={wall.thickness + 0.05} fill="#fff" />
+            <rect x={-half} y={-wall.thickness / 2 - 0.025} width={resized.width} height={wall.thickness + 0.05} fill="#fff" />
             {opening.kind === 'window'
               ? <><line x1={-half} y1={-0.035} x2={half} y2={-0.035} /><line x1={-half} y1={0.035} x2={half} y2={0.035} /></>
-              : <><line x1={-half} y1={0} x2={-half} y2={-Math.min(opening.width * 0.92, 1.05)} /><path d={`M ${-half} ${-Math.min(opening.width * 0.92, 1.05)} A ${Math.min(opening.width, 1.05)} ${Math.min(opening.width, 1.05)} 0 0 1 ${half} 0`} fill="none" /></>}
+              : <><line x1={-half} y1={0} x2={-half} y2={-Math.min(resized.width * 0.92, 1.05)} /><path d={`M ${-half} ${-Math.min(resized.width * 0.92, 1.05)} A ${Math.min(resized.width, 1.05)} ${Math.min(resized.width, 1.05)} 0 0 1 ${half} 0`} fill="none" /></>}
             <line className="opening-jamb" x1={-half} y1={-wall.thickness / 2 - 0.04} x2={-half} y2={wall.thickness / 2 + 0.04} />
             <line className="opening-jamb" x1={half} y1={-wall.thickness / 2 - 0.04} x2={half} y2={wall.thickness / 2 + 0.04} />
+            {selected && <>
+              {(['left', 'right'] as const).map((side) => <rect key={side} className="plan-opening-resize-handle"
+                data-opening-resize-handle={side} x={(side === 'left' ? -half : half) - 0.07} y={-0.07} width={0.14} height={0.14} rx={0.025}
+                role="button" tabIndex={tool === 'select' ? 0 : -1} aria-label={`Resize ${opening.kind} opening from ${side} edge`}
+                onPointerDown={(event) => beginOpeningResize(event, opening, wall, side)}
+                onKeyDown={(event) => keyboardResizeOpening(event, opening, wall, side)} />)}
+            </>}
           </g>
         );
       })}

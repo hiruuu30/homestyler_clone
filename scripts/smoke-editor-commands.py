@@ -100,6 +100,7 @@ async def run(url, executable):
         fixture['levels'].append(dict(fixture['levels'][0], id=upper, name='Upper smoke', elevation=3))
         fixture['activeLevelId'] = ground
         fixture['materials'].append(dict(id='material-command-smoke-blue', name='Generic test blue', category='wall', color='#4167b2'))
+        fixture['wallOpenings'] = [dict(id='opening-command-smoke-door', wallId='wall-north', kind='door', center=1, width=0.9, height=2.05, sillHeight=0)]
         for room in fixture['rooms']:
             room.update(floorMaterialId='material-command-smoke-blue', ceilingMaterialId='material-command-smoke-blue', ceilingVisible=True,
                         floorFinish=dict(IDENTITY, pattern='wood', rotation=27, offsetX=0.3), ceilingFinish=dict(IDENTITY, pattern='tile', rotation=-18, scaleY=1.4))
@@ -115,6 +116,35 @@ async def run(url, executable):
             await page.get_by_role('menuitem', name='Open...', exact=True).click()
         await (await chooser.value).set_files(dict(name='command-smoke.json', mimeType='application/json', buffer=json.dumps(fixture).encode()))
         await expect(page.locator('.project-title')).to_contain_text(fixture['name'])
+        door = page.locator('[data-opening-id="opening-command-smoke-door"]')
+        door_center = await door.evaluate('''element => {
+          const point = new DOMPoint(0, 0).matrixTransform(element.getScreenCTM());
+          return {x: point.x, y: point.y};
+        }''')
+        await page.mouse.click(door_center['x'], door_center['y'])
+        right_grip = page.locator('[data-opening-id="opening-command-smoke-door"] [data-opening-resize-handle="right"]')
+        await expect(right_grip).to_be_visible()
+        drag = await right_grip.evaluate('''handle => {
+          const box = {x: Number(handle.getAttribute('x')), y: Number(handle.getAttribute('y')),
+                       width: Number(handle.getAttribute('width')), height: Number(handle.getAttribute('height'))};
+          const matrix = handle.closest('[data-opening-id]').getScreenCTM();
+          const point = new DOMPoint(box.x + box.width / 2, box.y + box.height / 2).matrixTransform(matrix);
+          const axis = new DOMPoint(box.x + box.width / 2 + 1, box.y + box.height / 2).matrixTransform(matrix);
+          return {x: point.x, y: point.y, ux: axis.x - point.x, uy: axis.y - point.y};
+        }''')
+        await page.mouse.move(drag['x'], drag['y'])
+        await page.mouse.down()
+        await page.mouse.move(drag['x'] + drag['ux'] * 0.2, drag['y'] + drag['uy'] * 0.2, steps=5)
+        await page.mouse.up()
+        resized_state = await save()
+        resized_door = next(item for item in resized_state['wallOpenings'] if item['id'] == 'opening-command-smoke-door')
+        assert resized_door['width'] > 1 and resized_door['center'] > 1, resized_door
+        await right_grip.focus()
+        await page.keyboard.press('ArrowRight')
+        keyboard_state = await save()
+        keyboard_door = next(item for item in keyboard_state['wallOpenings'] if item['id'] == 'opening-command-smoke-door')
+        assert keyboard_door['width'] > resized_door['width'], keyboard_door
+        checks.append('2D door endpoint drag and arrow-key resize preserve the opposite jamb and persist geometry')
         before = await save()
         assert len(before['levels']) == 2 and len(before['furniture']) == 3
 

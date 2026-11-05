@@ -238,3 +238,5 @@
   .tool-panel { width: 168px; flex-basis: 168px; }
   .topbar > .top-actions { margin-top: 5px; }
 }
+
+.plan-opening-resize-handle{fill:#fff;stroke:#2468cf;stroke-width:.045;cursor:ew-resize;pointer-events:all;touch-action:none}.plan-opening-resize-handle:focus-visible{stroke:#174fa8;stroke-width:.075}
