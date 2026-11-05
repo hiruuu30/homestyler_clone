@@ -1,6 +1,6 @@
 # Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds a reference-measured command bar and undoable active-floor bulk clearing, plus independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); release revisions and bundle checks are recorded in the feature ledger. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds undoable structural floor voids across aligned levels, on top of the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); release revisions and bundle checks are recorded in the feature ledger. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
 
 ## Current milestone: command bar and active-floor clearing
 
@@ -16,24 +16,28 @@ A room's ceiling has a separate material assignment and independent generic wood
 
 In 2D Select mode, drag a hosted door/window along its wall to change its normalized position. Movement previews and clamps to the host wall; the existing model validation rejects invalid opening conflicts. A completed move is one undoable edit and survives local Save/reload. Corresponding full reference behavior remains unverified.
 
+## Structural openings across floors
+
+Select a room, choose an upper floor, and trace a polygon to create a linked floor-surface void on the source floor and every intervening floor through the target. The footprint must fit fully inside exactly one room on each level; grouped removal, Undo/Redo, JSON save/reload, unit conversion, and participating-floor deletion preserve the link. The 3D viewport still shows one active floor at a time: this does not add stair geometry, guards/framing, shaft walls, or a simultaneous stacked-floor view. No matched Homestyler structural-opening reference was available, so this is an independent generic feature, not a behavior or visual-parity claim.
+
 ## Other implemented capabilities
 
-The editor also supports rectangular and concave polygon rooms, snapping, wall topology repair and collinear joins, editable wall properties, multiple floors, floor-surface openings, translucent 3D ceilings, procedural floor mapping, furniture transforms and arrays, hidden-object recovery, plan underlays, unit conversion, and SVG/CSV/JSON exports. These generic implementations do not establish equivalent Homestyler behavior.
+The editor also supports rectangular and concave polygon rooms, snapping, wall topology repair and collinear joins, editable wall properties, multiple floors, single-floor and linked structural floor openings, translucent 3D ceilings, procedural floor mapping, furniture transforms and arrays, hidden-object recovery, plan underlays, unit conversion, and SVG/CSV/JSON exports. These generic implementations do not establish equivalent Homestyler behavior.
 
 ## Verification and boundaries
 
 - **Verified full-parity completion: 0%.** No complete feature/state suite has passed exact functional and pixel-level comparison. This is not an estimate of how much independent code has been written.
 - **Original catalog asset coverage: 0%.** No original Homestyler models, materials or textures are present.
-- **Local checks:** 118 tests pass across 10 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. Isolated Chromium verifies the measured toolbar/File-menu bounds, menu keyboard/checkbox semantics, file import/downloads, all three multi-floor bulk clears, Undo/Redo, Save/reload, 3D mounting and narrow-viewport menu visibility, with no page errors.
+- **Local checks:** 127 tests pass across 12 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. Isolated Chromium verifies the measured toolbar/File-menu bounds, menu keyboard/checkbox semantics, file import/downloads, all three multi-floor bulk clears, structural void drawing across two floors, grouped Undo/Redo, Save/reload, participating-floor deletion/restore, 3D mounting and narrow-viewport menu visibility, with no page errors.
 - **Earlier retained browser evidence:** independent floor/ceiling pattern persistence and opening drag/history/reload passed local Chromium checks. Ceiling/wall/furniture color checks previously measured 40,169/19,926/6,317 changed 3D pixels when undoing those color assignments.
 - **Publishing:** approved increments are pushed to GitHub main. Consult the latest deployment ledger record for the exact public bundle verification; a source push alone is not proof that the public alias has updated.
-- **PingFusi:** authenticated CLI preflight passes. The captured numeric command-bar/File-menu measurements are bounded evidence, not an independent review verdict or whole-editor pixel acceptance.
+- **PingFusi:** authenticated CLI preflight passes. The captured numeric command-bar/File-menu measurements are bounded evidence, not an independent review verdict or whole-editor pixel acceptance. The existing hosted review draft has no confirmed round receipt or verdict; no duplicate was filed. No matched reference state was available for the new structural-opening workflow.
 
 Significant scope remains incomplete: broader topology, original catalog/material coverage, cloud workflows, advanced/server-dependent features, exact reference interaction behavior and a comprehensive golden-image suite. Use independently authored code and generic procedural finishes until authorized assets are available.
 
 ## Local verification
 
-Run `npm test` and `npm run build`. For the reusable UI smoke, start the app on port 4173 and run `python3 scripts/smoke-editor-commands.py`; this requires Python Playwright and Chromium and uses an isolated disposable browser profile. Pass `--url` or `--executable` to override its defaults.
+Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-editor-commands.py` or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. Pass `--url` or `--executable` to override their defaults.
 
 ## Project files
 

@@ -47,3 +47,8 @@ The production build for code revision `3286021` was published through PingFusi'
 
 ## Command-bar review recovery note · November 5
 The latest scoped toolbar/File-menu review command (`homestyler-functional-editor`, region `Toolbar`) remained silent until its terminal was terminated at the two-hour wait limit; it returned no PingFusi ping ID and left no local `review-qa.json` round receipt. The hosted draft receipt exists, but the independent review submission state is therefore unresolved, not approved and not confirmed rejected. No duplicate review was filed because the remote state cannot be safely ruled out. This does not change the local 122-test, build, or Chromium evidence.
+
+
+## Structural-opening comparison availability · November 5
+
+A read-only `pingfusi status homestyler-functional-editor` check found no local workflow, and the existing target directory still contains only the hosted-draft receipt (no `review-qa.json` or review result). The draft remains available, but there is no confirmed independent verdict. Because the remote submission state cannot be safely ruled out, no duplicate review was filed. No matched Homestyler state for a multi-level structural floor opening was available for comparison; the new local Chromium interaction evidence is not a PingFusi visual review.

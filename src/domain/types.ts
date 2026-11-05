@@ -5,7 +5,7 @@ export type Point = Readonly<{
 
 export type Units = 'm' | 'ft';
 
-export type ToolMode = 'select' | 'room' | 'polygon' | 'hole' | 'wall' | 'furniture';
+export type ToolMode = 'select' | 'room' | 'polygon' | 'hole' | 'structural-hole' | 'wall' | 'furniture';
 
 export type Level = Readonly<{
   id: string;
@@ -61,6 +61,13 @@ export type WallOpening = Readonly<{
   sillHeight: number;
 }>;
 
+export type StructuralOpening = Readonly<{
+  id: string;
+  levelIds: readonly string[];
+  roomIds: readonly string[];
+  polygon: readonly Point[];
+}>;
+
 export type PlanUnderlay = Readonly<{
   id: string;
   name: string;
@@ -109,6 +116,7 @@ export type DesignProject = Readonly<{
   rooms: readonly Room[];
   walls: readonly Wall[];
   wallOpenings: readonly WallOpening[];
+  structuralOpenings: readonly StructuralOpening[];
   furniture: readonly FurnitureInstance[];
   underlays: readonly PlanUnderlay[];
   materials: readonly Material[];

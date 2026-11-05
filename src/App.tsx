@@ -5,9 +5,9 @@ import {
   PenTool, Plus, RotateCw, Scissors, Search, Settings, Mail, Sofa, Square, Trash2, Upload,
 } from 'lucide-react';
 import {
-  addFurniture, addRoomHole, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
+  addFurniture, addRoomHole, addStructuralOpening, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, assignRoomCeilingMaterial, assignWallMaterial, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
-  removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomCeilingFinishMapping, updateRoomFloorFinishMapping,
+  removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeStructuralOpening, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomCeilingFinishMapping, updateRoomFloorFinishMapping,
   findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, FloorFinishMapping, Point, ToolMode } from './domain/types';
@@ -68,10 +68,14 @@ export default function App() {
   const [arrayCopies, setArrayCopies] = useState(2);
   const [arrayOffsetX, setArrayOffsetX] = useState(1);
   const [arrayOffsetY, setArrayOffsetY] = useState(0);
+  const [structuralTargetLevelId, setStructuralTargetLevelId] = useState('');
   const importRef = useRef<HTMLInputElement>(null);
   const planImageRef = useRef<HTMLInputElement>(null);
 
   const activeLevel = project.levels.find((level) => level.id === activeLevelId) ?? project.levels[0];
+  const higherLevels = project.levels.filter((level) => level.elevation > activeLevel.elevation + 1e-9)
+    .sort((left, right) => left.elevation - right.elevation);
+  const structuralTargetLevel = higherLevels.find((level) => level.id === structuralTargetLevelId) ?? higherLevels[0];
   const visibleProject = useMemo(() => ({
     ...project,
     activeLevelId,
@@ -212,12 +216,27 @@ export default function App() {
       notify(error instanceof Error ? error.message : 'Could not create this floor opening');
     }
   }
+  function createStructuralRoomHole(points: readonly Point[]) {
+    if (!selectedRoom) { notify('Select a source room before drawing a through-floor opening'); setTool('select'); return; }
+    if (!structuralTargetLevel) { notify('Add a higher floor before drawing a through-floor opening'); setTool('select'); return; }
+    try {
+      commit(addStructuralOpening(project, selectedRoom.id, structuralTargetLevel.id, points));
+      setSelectedId(selectedRoom.id);
+      setTool('select');
+      notify(`Through-floor opening created through ${structuralTargetLevel.name} · Undo to restore`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not create this through-floor opening');
+    }
+  }
   function deleteRoomHole(holeIndex: number) {
     if (!selectedRoom) return;
     try {
-      commit(removeRoomHole(project, selectedRoom.id, holeIndex));
+      const polygon = selectedRoom.holes?.[holeIndex];
+      const structural = polygon && project.structuralOpenings.find((opening) => opening.roomIds.includes(selectedRoom.id)
+        && opening.polygon.length === polygon.length && opening.polygon.every((point, index) => point.x === polygon[index].x && point.y === polygon[index].y));
+      commit(structural ? removeStructuralOpening(project, structural.id) : removeRoomHole(project, selectedRoom.id, holeIndex));
       setSelectedId(selectedRoom.id);
-      notify('Floor opening removed · Undo to restore');
+      notify(structural ? 'Through-floor opening removed from every linked floor · Undo to restore' : 'Floor opening removed · Undo to restore');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Could not remove this floor opening');
     }
@@ -769,9 +788,9 @@ export default function App() {
           {collapsed && <button className="expand-panel" onClick={() => setCollapsed(false)} aria-label="Show panel"><ChevronRight size={17} /></button>}
           <div className="viewport-area">
             {view === 'plan'
-              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateRoomHole={createRoomHole} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} onMoveOpening={moveOpening} onResizeOpening={resizeOpening} fitRequest={cameraFitRequest} />
+              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateRoomHole={createRoomHole} onCreateStructuralOpening={createStructuralRoomHole} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} onMoveOpening={moveOpening} onResizeOpening={resizeOpening} fitRequest={cameraFitRequest} />
               : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport key={cameraFitRequest} project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
-            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · drag doors and windows along their walls · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
+            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'structural-hole' ? `Trace a void through every floor up to ${structuralTargetLevel?.name ?? 'the selected upper floor'} · close on the first point or press Enter` : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · drag doors and windows along their walls · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
           </div>
           <footer className="bottom-bar">
             <div className="canvas-tools"><button className={tool === 'select' ? 'chosen' : ''} title="Select" onClick={() => setTool('select')}><MousePointer2 size={16} /></button><button className={tool === 'room' ? 'chosen' : ''} title="Draw room" onClick={() => { setView('plan'); setTool('room'); }}><Square size={16} /></button><button className={tool === 'wall' ? 'chosen' : ''} title="Draw wall" onClick={() => { setView('plan'); setTool('wall'); }}><Grid2X2 size={16} /></button><button title="Add sofa" onClick={() => { setPanel('furniture'); addSofa(); }}><Sofa size={16} /></button></div>
@@ -817,7 +836,17 @@ export default function App() {
             <section><h3>Room options</h3>
               <label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label>
               <button className="rotate-btn" title="Trace an interior floor void; Undo is available" onClick={() => { setView('plan'); setTool('hole'); }}>Draw floor opening</button>
-              {(selectedRoom.holes ?? []).map((_, index) => <button key={`${selectedRoom.id}-hole-${index}`} className="rotate-btn danger-action" title="Undo is available" onClick={() => deleteRoomHole(index)}>Remove floor opening {index + 1}</button>)}
+              {higherLevels.length > 0 && <>
+                <label className="mapping-select-label">Through upper floor<select aria-label="Through upper floor" className="mapping-select" value={structuralTargetLevel?.id ?? ''} onChange={(event) => setStructuralTargetLevelId(event.target.value)}>
+                  {higherLevels.map((level) => <option key={level.id} value={level.id}>{level.name}</option>)}
+                </select></label>
+                <button className="rotate-btn" title="Trace a linked floor void on this and every intervening upper floor; Undo is available" onClick={() => { setView('plan'); setTool('structural-hole'); }}>Draw through-floor opening</button>
+              </>}
+              {(selectedRoom.holes ?? []).map((hole, index) => {
+                const linked = project.structuralOpenings.some((opening) => opening.roomIds.includes(selectedRoom.id)
+                  && opening.polygon.length === hole.length && opening.polygon.every((point, pointIndex) => point.x === hole[pointIndex].x && point.y === hole[pointIndex].y));
+                return <button key={`${selectedRoom.id}-hole-${index}`} className="rotate-btn danger-action" title="Undo is available" onClick={() => deleteRoomHole(index)}>{linked ? 'Remove through-floor opening' : 'Remove floor opening'} {index + 1}</button>;
+              })}
             </section>
           </div>}
           {selectedWall && <div className="properties wall-properties">

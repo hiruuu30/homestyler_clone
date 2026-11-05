@@ -8,6 +8,7 @@ import type {
   PlanUnderlay,
   Point,
   Room,
+  StructuralOpening,
   Units,
   Wall,
   WallOpening,
@@ -40,6 +41,10 @@ function point(value: Point, label: string): Point {
     throw new TypeError(`${label} coordinates must be finite numbers`);
   }
   return freeze({ x: value.x, y: value.y });
+}
+
+function samePolygon(left: readonly Point[], right: readonly Point[]): boolean {
+  return left.length === right.length && left.every((value, index) => value.x === right[index].x && value.y === right[index].y);
 }
 
 function id(value: string, label: string): string {
@@ -249,6 +254,7 @@ function copyProject(project: DesignProject, patch: Partial<DesignProject>): Des
     rooms: freeze([...(patch.rooms ?? project.rooms)]),
     walls: freeze([...(patch.walls ?? project.walls)]),
     wallOpenings: freeze([...(patch.wallOpenings ?? project.wallOpenings)]),
+    structuralOpenings: freeze([...(patch.structuralOpenings ?? project.structuralOpenings)]),
     furniture: freeze([...(patch.furniture ?? project.furniture)]),
     underlays: freeze([...(patch.underlays ?? project.underlays)]),
     materials: freeze([...(patch.materials ?? project.materials)]),
@@ -303,6 +309,12 @@ export function convertProjectUnits(project: DesignProject, units: Units): Desig
       width: scaleLength(opening.width, factor),
       height: scaleLength(opening.height, factor),
       sillHeight: scaleLength(opening.sillHeight, factor),
+    })),
+    structuralOpenings: project.structuralOpenings.map((opening) => freeze({
+      ...opening,
+      levelIds: freeze([...opening.levelIds]),
+      roomIds: freeze([...opening.roomIds]),
+      polygon: freeze(opening.polygon.map(scalePoint)),
     })),
     furniture: project.furniture.map((item) => freeze({
       ...item,
@@ -486,8 +498,83 @@ export function removeRoomHole(project: DesignProject, roomId: string, holeIndex
   if (!room) throw new RangeError(`unknown room: ${roomId}`);
   const holes = room.holes ?? [];
   if (!Number.isInteger(holeIndex) || holeIndex < 0 || holeIndex >= holes.length) throw new RangeError('room hole index is out of range');
+  const structural = project.structuralOpenings.find((opening) => opening.roomIds.includes(room.id) && samePolygon(opening.polygon, holes[holeIndex]));
+  if (structural) return removeStructuralOpening(project, structural.id);
   const updated = roomWithHoles(room, holes.filter((_, index) => index !== holeIndex), project.units);
   return copyProject(project, { rooms: project.rooms.map((item) => item.id === room.id ? updated : item) });
+}
+
+/** Create the same validated floor-surface void on every room level from the source through an upper target. */
+export function addStructuralOpening(project: DesignProject, sourceRoomId: string, targetLevelId: string, vertices: readonly Point[]): DesignProject {
+  const sourceRoom = project.rooms.find((room) => room.id === id(sourceRoomId, 'source room id'));
+  if (!sourceRoom) throw new RangeError(`unknown source room: ${sourceRoomId}`);
+  const sourceLevel = project.levels.find((level) => level.id === sourceRoom.levelId);
+  const targetLevel = project.levels.find((level) => level.id === id(targetLevelId, 'target level id'));
+  if (!sourceLevel) throw new RangeError(`unknown source level: ${sourceRoom.levelId}`);
+  if (!targetLevel) throw new RangeError(`unknown target level: ${targetLevelId}`);
+  if (targetLevel.elevation <= sourceLevel.elevation + 1e-9) {
+    throw new RangeError('target floor must be above the selected room floor');
+  }
+
+  const levels = [sourceLevel, ...project.levels
+    .filter((level) => level.id !== sourceLevel.id && level.elevation > sourceLevel.elevation + 1e-9
+      && level.elevation <= targetLevel.elevation + 1e-9)
+    .sort((left, right) => left.elevation - right.elevation)];
+  if (levels.at(-1)?.id !== targetLevel.id) throw new RangeError('target floor is not in the source floor span');
+
+  let next = project;
+  const roomIds: string[] = [];
+  const levelIds: string[] = [];
+  for (const level of levels) {
+    const candidates = level.id === sourceLevel.id
+      ? [sourceRoom]
+      : project.rooms.filter((room) => room.levelId === level.id);
+    const valid: { roomId: string; project: DesignProject }[] = [];
+    for (const room of candidates) {
+      try {
+        valid.push({ roomId: room.id, project: addRoomHole(next, room.id, vertices) });
+      } catch {
+        // A candidate is usable only when the entire opening fits its room without conflicting with an existing void.
+      }
+    }
+    if (valid.length === 0) throw new RangeError(`opening must fit completely inside a room on ${level.name}`);
+    if (valid.length > 1) throw new RangeError(`opening matches multiple rooms on ${level.name}; make the room boundaries unambiguous`);
+    next = valid[0].project;
+    roomIds.push(valid[0].roomId);
+    levelIds.push(level.id);
+  }
+
+  const sourceWithHole = next.rooms.find((room) => room.id === sourceRoom.id);
+  const polygon = sourceWithHole?.holes?.at(-1);
+  if (!polygon) throw new Error('validated structural opening geometry was not retained');
+  const usedIds = new Set(project.structuralOpenings.map((opening) => opening.id));
+  let suffix = project.structuralOpenings.length + 1;
+  let openingId = `structural-opening-${suffix}`;
+  while (usedIds.has(openingId)) openingId = `structural-opening-${++suffix}`;
+  const structuralOpening: StructuralOpening = freeze({
+    id: openingId,
+    levelIds: freeze(levelIds),
+    roomIds: freeze(roomIds),
+    polygon: freeze(polygon.map((vertex) => point(vertex, 'structural opening point'))),
+  });
+  return copyProject(next, { structuralOpenings: [...project.structuralOpenings, structuralOpening] });
+}
+
+/** Remove one linked opening and its matching void from every participating room. */
+export function removeStructuralOpening(project: DesignProject, openingId: string): DesignProject {
+  const opening = project.structuralOpenings.find((item) => item.id === id(openingId, 'structural opening id'));
+  if (!opening) throw new RangeError(`unknown structural opening: ${openingId}`);
+  const rooms = project.rooms.map((room) => {
+    if (!opening.roomIds.includes(room.id)) return room;
+    const holes = room.holes ?? [];
+    const holeIndex = holes.findIndex((hole) => samePolygon(hole, opening.polygon));
+    if (holeIndex < 0) throw new RangeError(`linked opening geometry is missing from room: ${room.id}`);
+    return roomWithHoles(room, holes.filter((_, index) => index !== holeIndex), project.units);
+  });
+  return copyProject(project, {
+    rooms,
+    structuralOpenings: project.structuralOpenings.filter((item) => item.id !== opening.id),
+  });
 }
 
 export function createWall(
@@ -889,12 +976,24 @@ export function removeLevel(project: DesignProject, levelId: string): DesignProj
   if (project.levels.length <= 1) throw new RangeError('a project must keep at least one floor');
   const levels = project.levels.filter((level) => level.id !== levelId);
   const activeLevelId = project.activeLevelId === levelId ? levels[0].id : project.activeLevelId;
+  const removedStructuralOpenings = project.structuralOpenings.filter((opening) => opening.levelIds.includes(levelId));
+  const rooms = project.rooms.filter((room) => room.levelId !== levelId).map((room) => {
+    const linked = removedStructuralOpenings.filter((opening) => opening.roomIds.includes(room.id));
+    if (linked.length === 0) return room;
+    let holes = [...(room.holes ?? [])];
+    linked.forEach((opening) => {
+      const index = holes.findIndex((hole) => samePolygon(hole, opening.polygon));
+      if (index >= 0) holes = holes.filter((_, holeIndex) => holeIndex !== index);
+    });
+    return roomWithHoles(room, holes, project.units);
+  });
   return copyProject(project, {
     levels,
     activeLevelId,
-    rooms: project.rooms.filter((room) => room.levelId !== levelId),
+    rooms,
     walls: project.walls.filter((wall) => wall.levelId !== levelId),
     wallOpenings: project.wallOpenings.filter((opening) => project.walls.some((wall) => wall.id === opening.wallId && wall.levelId !== levelId)),
+    structuralOpenings: project.structuralOpenings.filter((opening) => !opening.levelIds.includes(levelId)),
     furniture: project.furniture.filter((item) => item.levelId !== levelId),
     underlays: project.underlays.filter((item) => item.levelId !== levelId),
   });
@@ -1319,6 +1418,7 @@ export function normalizeProject(value: unknown): DesignProject {
     throw new TypeError('project is missing required collections');
   }
   if (candidate.wallOpenings !== undefined && !Array.isArray(candidate.wallOpenings)) throw new TypeError('wallOpenings must be an array');
+  if (candidate.structuralOpenings !== undefined && !Array.isArray(candidate.structuralOpenings)) throw new TypeError('structuralOpenings must be an array');
   if (candidate.underlays !== undefined && !Array.isArray(candidate.underlays)) throw new TypeError('underlays must be an array');
   const units: Units = candidate.units === 'ft' ? 'ft' : 'm';
   const rawLevels = Array.isArray(candidate.levels) ? candidate.levels : [];
@@ -1401,6 +1501,51 @@ export function normalizeProject(value: unknown): DesignProject {
     validateUnderlay(underlay);
     return underlay;
   }) as PlanUnderlay[];
+  const structuralOpeningIds = new Set<string>();
+  const structuralOpenings: StructuralOpening[] = (candidate.structuralOpenings ?? []).map((value) => {
+    if (!value || typeof value !== 'object') throw new TypeError('structural opening must be an object');
+    const raw = value as Partial<StructuralOpening>;
+    if (!Array.isArray(raw.levelIds) || !Array.isArray(raw.roomIds) || !Array.isArray(raw.polygon)
+      || raw.levelIds.length < 2 || raw.levelIds.length !== raw.roomIds.length || raw.polygon.length < 3) {
+      throw new TypeError('structural opening must reference matching rooms on at least two floors and contain a polygon');
+    }
+    const openingId = id(raw.id as string, 'structural opening id');
+    if (structuralOpeningIds.has(openingId)) throw new RangeError(`duplicate structural opening id: ${openingId}`);
+    structuralOpeningIds.add(openingId);
+    const levelIds = raw.levelIds.map((value) => id(value, 'structural opening level id'));
+    const roomIds = raw.roomIds.map((value) => id(value, 'structural opening room id'));
+    if (new Set(levelIds).size !== levelIds.length || new Set(roomIds).size !== roomIds.length) {
+      throw new RangeError('structural opening floor and room references must be unique');
+    }
+    let previousElevation = Number.NEGATIVE_INFINITY;
+    levelIds.forEach((levelId) => {
+      const level = levels.find((item) => item.id === levelId);
+      if (!level) throw new RangeError(`structural opening floor is missing: ${levelId}`);
+      if (level.elevation <= previousElevation + 1e-9) throw new RangeError('structural opening floors must be ordered from bottom to top');
+      previousElevation = level.elevation;
+    });
+    const sourceElevation = levels.find((level) => level.id === levelIds[0])!.elevation;
+    const targetElevation = levels.find((level) => level.id === levelIds.at(-1))!.elevation;
+    const expectedLevels = [levelIds[0], ...levels
+      .filter((level) => level.id !== levelIds[0] && level.elevation > sourceElevation + 1e-9 && level.elevation <= targetElevation + 1e-9)
+      .sort((left, right) => left.elevation - right.elevation)
+      .map((level) => level.id)];
+    if (expectedLevels.length !== levelIds.length || expectedLevels.some((levelId, index) => levelId !== levelIds[index])) {
+      throw new RangeError('structural opening must include every floor between its endpoints');
+    }
+    const polygon = raw.polygon.map((vertex, index) => {
+      if (!vertex || typeof vertex !== 'object') throw new TypeError(`structural opening point ${index + 1} must be an object`);
+      return point(vertex, `structural opening point ${index + 1}`);
+    });
+    roomIds.forEach((roomId, index) => {
+      const room = rooms.find((item) => item.id === roomId);
+      if (!room || room.levelId !== levelIds[index]) throw new RangeError(`structural opening room does not match floor: ${roomId}`);
+      if (!(room.holes ?? []).some((hole) => samePolygon(hole, polygon))) {
+        throw new RangeError(`structural opening geometry is missing from room: ${roomId}`);
+      }
+    });
+    return freeze({ id: openingId, levelIds: freeze(levelIds), roomIds: freeze(roomIds), polygon: freeze(polygon) });
+  });
   const materials = candidate.materials.map((item) => copyMaterial(item as Material));
   return freeze({
     ...candidate,
@@ -1412,6 +1557,7 @@ export function normalizeProject(value: unknown): DesignProject {
     rooms: freeze(rooms),
     walls: freeze(walls),
     wallOpenings: freeze(wallOpenings),
+    structuralOpenings: freeze(structuralOpenings),
     furniture: freeze(furniture),
     underlays: freeze(underlays),
     materials: freeze(materials),
@@ -1455,6 +1601,7 @@ export function createStarterProject(
     rooms: freeze(rooms),
     walls: freeze(walls),
     wallOpenings: freeze([]),
+    structuralOpenings: freeze([]),
     furniture: freeze([]),
     underlays: freeze([]),
     materials: freeze(materials),

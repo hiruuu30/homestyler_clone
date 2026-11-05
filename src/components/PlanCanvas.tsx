@@ -13,6 +13,7 @@ export type PlanCanvasProps = {
   onCreateRoom: (start: Point, end: Point) => void;
   onCreatePolygonRoom: (points: readonly Point[]) => void;
   onCreateRoomHole: (points: readonly Point[]) => void;
+  onCreateStructuralOpening: (points: readonly Point[]) => void;
   onCreateWall: (start: Point, end: Point) => void;
   onMoveFurniture: (id: string, position: Point) => void;
   onMoveOpening: (id: string, center: number) => void;
@@ -89,7 +90,7 @@ function resizePreview(drag: Extract<DragState, { mode: 'resize-opening' }>, poi
   );
 }
 
-export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, onCreatePolygonRoom, onCreateRoomHole, onCreateWall, onMoveFurniture, onMoveOpening, onResizeOpening, fitRequest }: PlanCanvasProps) {
+export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, onCreatePolygonRoom, onCreateRoomHole, onCreateStructuralOpening, onCreateWall, onMoveFurniture, onMoveOpening, onResizeOpening, fitRequest }: PlanCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [polygonPoints, setPolygonPoints] = useState<Point[]>([]);
@@ -100,7 +101,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   const viewBox = `${visibleBox.minX} ${visibleBox.minY} ${visibleBox.width} ${visibleBox.height}`;
   const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
   const gridSize = GRID_SIZE * unitsPerMetre;
-  const polygonTool = tool === 'polygon' || tool === 'hole';
+  const polygonTool = tool === 'polygon' || tool === 'hole' || tool === 'structural-hole';
   const roomFill = (room: DesignProject['rooms'][number]) => {
     const color = project.materials.find((material) => material.id === room.floorMaterialId)?.color ?? '#c9b8a0';
     const spec = floorPatternSpec(room.id, floorFinishForRoom(room), color, project.units);
@@ -223,6 +224,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       setPolygonCursor(nextPoint);
       if (polygonPoints.length >= 3 && distance(nextPoint, polygonPoints[0]) <= snapDistance()) {
         if (tool === 'hole') onCreateRoomHole(polygonPoints);
+        else if (tool === 'structural-hole') onCreateStructuralOpening(polygonPoints);
         else onCreatePolygonRoom(polygonPoints);
         setPolygonPoints([]);
         setPolygonCursor(null);
@@ -349,6 +351,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
         if (event.key === 'Enter' && polygonPoints.length >= 3) {
           event.preventDefault();
           if (tool === 'hole') onCreateRoomHole(polygonPoints);
+          else if (tool === 'structural-hole') onCreateStructuralOpening(polygonPoints);
           else onCreatePolygonRoom(polygonPoints);
           setPolygonPoints([]);
           setPolygonCursor(null);
