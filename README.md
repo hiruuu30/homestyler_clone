@@ -1,6 +1,6 @@
 # Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone extends conservative room-constrained furniture placement to safe duplication and atomic arrays, alongside linked floor voids, the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); its status is not rechecked for this GitHub-only increment. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds a transient, snap-aware 2D ruler to the existing room-constrained furniture placement, duplication and atomic-array work, alongside linked floor voids, the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); its status is not rechecked for this GitHub-only increment. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
 
 ## Current milestone: command bar and active-floor clearing
 
@@ -28,6 +28,10 @@ Duplicate tests a deterministic set of adjacent positions in increasing center-t
 
 These are conservative rules for this independent editor, not recovered Homestyler semantics. The editor does not automatically reassign rooms or repair legacy placements; existing stored placements remain untouched until edited. Exact visual and behavioral parity is unverified.
 
+## 2D ruler measurements
+
+Choose **Tools → Ruler**, then click two plan points. Each point snaps using the editor's existing wall/room endpoint-first and edge-projection policy; the live line and distance label use the active project unit. A third click starts a new measurement, and Escape clears it. The overlay is temporary: it does not change project geometry, selection, Undo/Redo, local saves, or exports. This is a generic local tool; Homestyler's exact ruler gestures, formatting, persistence, and visual treatment have not been compared.
+
 ## Other implemented capabilities
 
 The editor also supports rectangular and concave polygon rooms, snapping, wall topology repair and collinear joins, editable wall properties, multiple floors, single-floor and linked structural floor openings, translucent 3D ceilings, procedural floor mapping, constrained furniture transforms and arrays, hidden-object recovery, plan underlays, unit conversion, and SVG/CSV/JSON exports. These generic implementations do not establish equivalent Homestyler behavior.
@@ -36,7 +40,7 @@ The editor also supports rectangular and concave polygon rooms, snapping, wall t
 
 - **Verified full-parity completion: 0%.** No complete feature/state suite has passed exact functional and pixel-level comparison. This is not an estimate of how much independent code has been written.
 - **Original catalog asset coverage: 0%.** No original Homestyler models, materials or textures are present.
-- **Local checks:** 140 tests pass across 13 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. An isolated Chromium smoke verifies 2D/3D furniture placement, 10 cm snapping, invalid-drop rollback, a legal duplicate position, atomic rejection after the first array copy fits but the next does not, Undo/Redo, Save/reload, and zero page errors. No Homestyler comparison was performed for these local placement rules.
+- **Local checks:** 143 tests pass across 14 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. Isolated Chromium smokes verify the 2D ruler's snapped 2.00 m wall measurement, Escape clearing, unchanged saved project and history, plus 2D/3D furniture placement, snapping, invalid-drop rollback, legal duplication, atomic array rejection, Undo/Redo, Save/reload, and zero page errors. No Homestyler comparison was performed for these local rules.
 - **Earlier retained browser evidence:** independent floor/ceiling pattern persistence and opening drag/history/reload passed local Chromium checks. Ceiling/wall/furniture color checks previously measured 40,169/19,926/6,317 changed 3D pixels when undoing those color assignments.
 - **Publishing:** approved increments are pushed to GitHub main. Consult the latest deployment ledger record for the exact public bundle verification; a source push alone is not proof that the public alias has updated.
 - **PingFusi:** authenticated CLI preflight passes. The captured numeric command-bar/File-menu measurements are bounded evidence, not an independent review verdict or whole-editor pixel acceptance. The existing hosted review draft has no confirmed round receipt or verdict; no duplicate was filed. No matched reference state was available for the new structural-opening workflow.
@@ -45,7 +49,7 @@ Significant scope remains incomplete: broader topology, original catalog/materia
 
 ## Local verification
 
-Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-furniture-placement.py`, `python3 scripts/smoke-editor-commands.py`, or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. Pass `--url` or `--executable` to override their defaults.
+Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-ruler.py`, `python3 scripts/smoke-furniture-placement.py`, `python3 scripts/smoke-editor-commands.py`, or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. Pass `--url` or `--executable` to override their defaults.
 
 ## Project files
 

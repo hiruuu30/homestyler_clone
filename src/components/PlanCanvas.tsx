@@ -5,6 +5,7 @@ import { canPlaceFurniture } from '../domain/furniture-placement';
 import type { DesignProject, FurnitureInstance, Point, ToolMode } from '../domain/types';
 import { floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
 import { resizeOpeningFromEdge } from '../domain/wall-openings';
+import { formatMeasurement } from '../domain/measurement';
 
 export type PlanCanvasProps = {
   project: DesignProject;
@@ -23,6 +24,7 @@ export type PlanCanvasProps = {
 };
 
 type CameraBox = { minX: number; minY: number; width: number; height: number };
+type MeasurementState = { start: Point; end: Point | null; cursor: Point };
 
 type DragState =
   | { mode: 'create'; start: Point; current: Point }
@@ -96,6 +98,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   const [drag, setDrag] = useState<DragState | null>(null);
   const [polygonPoints, setPolygonPoints] = useState<Point[]>([]);
   const [polygonCursor, setPolygonCursor] = useState<Point | null>(null);
+  const [measurement, setMeasurement] = useState<MeasurementState | null>(null);
   const [cameraBox, setCameraBox] = useState<CameraBox | null>(null);
   const bounds = projectBounds(project);
   const visibleBox = cameraBox ?? bounds;
@@ -113,6 +116,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   useEffect(() => {
     setPolygonPoints([]);
     setPolygonCursor(null);
+    setMeasurement(null);
   }, [tool]);
 
   const snapDistance = () => {
@@ -138,7 +142,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   };
 
   const beginFurnitureDrag = (event: ReactPointerEvent<SVGGElement>, item: FurnitureInstance) => {
-    if (polygonTool) return;
+    if (polygonTool || tool === 'measure') return;
     event.stopPropagation();
     onSelect(item.id);
     if (tool !== 'select') return;
@@ -149,7 +153,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
   };
 
   const beginOpeningDrag = (event: ReactPointerEvent<SVGGElement>, opening: DesignProject['wallOpenings'][number], wall: DesignProject['walls'][number]) => {
-    if (polygonTool) return;
+    if (polygonTool || tool === 'measure') return;
     event.stopPropagation();
     onSelect(opening.id);
     if (tool !== 'select') return;
@@ -180,6 +184,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
     wall: DesignProject['walls'][number],
     side: 'left' | 'right',
   ) => {
+    if (tool === 'measure') return;
     event.stopPropagation();
     onSelect(opening.id);
     if (tool !== 'select') return;
@@ -237,6 +242,17 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       }
       return;
     }
+    if (tool === 'measure') {
+      event.preventDefault();
+      event.currentTarget.focus();
+      const point = modelPoint(event.clientX, event.clientY);
+      if (!point) return;
+      const snapped = snapPoint(point);
+      setMeasurement((current) => !current || current.end
+        ? { start: snapped, end: null, cursor: snapped }
+        : { ...current, end: snapped, cursor: snapped });
+      return;
+    }
     const edgeTarget = tool === 'wall' && event.target instanceof SVGElement
       && (event.target.classList.contains('plan-wall') || event.target.classList.contains('plan-room'));
     const backgroundTarget = event.target === event.currentTarget
@@ -258,6 +274,13 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
     if (polygonTool) {
       const point = modelPoint(event.clientX, event.clientY);
       if (point) setPolygonCursor(snapPoint(point));
+    }
+    if (tool === 'measure' && measurement && !measurement.end) {
+      const point = modelPoint(event.clientX, event.clientY);
+      if (point) {
+        const snapped = snapPoint(point);
+        setMeasurement((current) => current && !current.end ? { ...current, cursor: snapped } : current);
+      }
     }
     if (!drag) return;
     if (drag.mode === 'pan') {
@@ -348,14 +371,21 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       className="plan-canvas"
       viewBox={viewBox}
       role="img"
-      aria-label="2D floor plan"
-      tabIndex={polygonTool ? 0 : undefined}
+      aria-label={tool === 'measure' ? '2D floor plan. Click two points to measure; Escape clears the measurement.' : '2D floor plan'}
+      tabIndex={polygonTool || tool === 'measure' ? 0 : undefined}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={finishDrag}
       onPointerCancel={cancelDrag}
       onWheel={handleWheel}
       onKeyDown={(event) => {
+        if (tool === 'measure') {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setMeasurement(null);
+          }
+          return;
+        }
         if (!polygonTool) return;
         if (event.key === 'Enter' && polygonPoints.length >= 3) {
           event.preventDefault();
@@ -404,7 +434,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
           d={roomPath(room)}
           fill={roomFill(room)}
           fillRule="evenodd"
-          onPointerDown={(event) => { if (polygonTool || tool === 'wall') return; event.stopPropagation(); onSelect(room.id); }}
+          onPointerDown={(event) => { if (polygonTool || tool === 'wall' || tool === 'measure') return; event.stopPropagation(); onSelect(room.id); }}
         />
       ))}
       {project.walls.map((wall) => (
@@ -417,7 +447,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
             x2={wall.end.x}
             y2={wall.end.y}
             strokeWidth={wall.thickness}
-            onPointerDown={(event) => { if (polygonTool || tool === 'wall') return; event.stopPropagation(); onSelect(wall.id); }}
+            onPointerDown={(event) => { if (polygonTool || tool === 'wall' || tool === 'measure') return; event.stopPropagation(); onSelect(wall.id); }}
           />
           <line
             data-wall-id={wall.id}
@@ -497,6 +527,18 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       {polygonPreview.length > 1 && <polyline className="plan-polygon-preview" points={pointsAttribute(polygonPreview)} />}
       {polygonPoints.map((point, index) => <circle key={`polygon-point-${index}`} className="plan-polygon-vertex" cx={point.x} cy={point.y} r={0.07 * unitsPerMetre} />)}
       {drag?.mode === 'create' && tool === 'wall' && <line className="plan-preview" x1={drag.start.x} y1={drag.start.y} x2={drag.current.x} y2={drag.current.y} />}
+      {measurement && (() => {
+        const end = measurement.end ?? measurement.cursor;
+        const centerX = (measurement.start.x + end.x) / 2;
+        const centerY = (measurement.start.y + end.y) / 2;
+        const label = formatMeasurement(measurement.start, end, project.units);
+        return <g className="plan-measurement" role="status" aria-label={`Measured distance ${label}`}>
+          <line className="plan-measurement-line" x1={measurement.start.x} y1={measurement.start.y} x2={end.x} y2={end.y} />
+          <circle className="plan-measurement-endpoint" cx={measurement.start.x} cy={measurement.start.y} r={0.075 * unitsPerMetre} />
+          <circle className="plan-measurement-endpoint" cx={end.x} cy={end.y} r={0.075 * unitsPerMetre} />
+          <text className="plan-measurement-label" data-measurement-label="true" x={centerX} y={centerY - 0.16 * unitsPerMetre}>{label}</text>
+        </g>;
+      })()}
     </svg>
   );
 }

@@ -148,3 +148,8 @@ Furniture duplication now searches a deterministic distance-ordered set of adjac
 
 
 GitHub-only publish record: implementation commit `99b42f9` was pushed to `main` on `hiruuu30/homestyler_clone`. No Vercel sign-in, deployment inspection, or production claim was made; public deployment status remains unknown for this increment.
+
+
+## 2026-11-05 MEASURE-001 local follow-up
+
+The previously disabled Tools → Ruler command now enters a transient 2D measurement mode. Plan clicks use the existing endpoint-first/wall-and-room-edge snapping policy; the live SVG overlay draws a line with endpoint markers and reports distance in the active project unit. A third click starts a fresh measurement; Escape clears it. The overlay is not part of the canonical project, Undo/Redo, local Save, or exports. Three pure helper tests cover zero/diagonal distance, metre/foot labels, immutable points, and invalid inputs. The complete local suite passes 143 tests across 14 files, strict TypeScript/Vite build succeeds with the existing large lazy-3D-chunk warning, and isolated Chromium verified Tools → Ruler, a snapped `2.00 m` wall span, no wall selection or Undo entry, Escape clearing, unchanged saved project data, and zero page errors. This generic implementation is not a recovered Homestyler ruler specification; exact gesture, snapping, label styling, persistence, and visual behavior remain unverified. Full-parity verification remains 0%, original catalog assets remain deferred, and the user's GitHub-only publishing choice still applies.

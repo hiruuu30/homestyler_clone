@@ -4,6 +4,11 @@
 .plan-furniture{cursor:grab}.plan-furniture:active{cursor:grabbing}.plan-furniture.is-invalid{stroke:#b42318;stroke-width:.09;stroke-dasharray:.12 .06;opacity:.88}
 .danger-action{color:#b34b4b}.danger-action:hover{background:#fff6f6;border-color:#eccaca}
 
+.plan-measurement{pointer-events:none}
+.plan-measurement-line{stroke:#1f69d3;stroke-width:.045;stroke-dasharray:.12 .07}
+.plan-measurement-endpoint{fill:#fff;stroke:#1f69d3;stroke-width:.045}
+.plan-measurement-label{fill:#174f9e;stroke:#fff;stroke-width:.09;paint-order:stroke;stroke-linejoin:round;font:700 .19 'DM Sans',Arial,sans-serif;text-anchor:middle;dominant-baseline:central}
+
 .level-list{display:grid;gap:4px}.level-row{min-height:38px;display:flex;align-items:center;border:1px solid #e5e7e9;border-radius:5px;background:#fff}.level-row.active{border-color:#9dbbf0;background:#f5f8ff}.level-select{flex:1;min-width:0;height:38px;padding:0 8px;display:flex;align-items:center;gap:8px;border:0;background:transparent;text-align:left;color:#69717a;cursor:pointer}.level-row.active .level-select{color:#2565ce}.level-select span{min-width:0;display:flex;flex-direction:column;gap:2px;font-size:9px;font-weight:600}.level-select small{color:#92979e;font-size:8px;font-weight:400}.level-delete{height:28px;width:28px;margin-right:4px;display:grid;place-items:center;border:0;border-radius:4px;background:transparent;color:#9a7272;cursor:pointer}.level-delete:hover{background:#fff0f0;color:#ad4545}.add-level{margin-top:5px;cursor:pointer}
 
 /* Reference-aligned 2D overview: measured at 220×160, 18px from the right and 60px from the top. */
