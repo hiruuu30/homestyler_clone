@@ -5,7 +5,7 @@ import {
   PenTool, Plus, RotateCw, Scissors, Search, Settings, Mail, Sofa, Square, Trash2, Upload,
 } from 'lucide-react';
 import {
-  addFurniture, addRoomHole, addStructuralOpening, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
+  addFurniture, addRoomHole, addStructuralOpening, addWall as addProjectWall, addWallOpening, alignWall, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, assignRoomCeilingMaterial, assignWallMaterial, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
   removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeStructuralOpening, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomCeilingFinishMapping, updateRoomFloorFinishMapping,
   findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
@@ -553,6 +553,17 @@ export default function App() {
       return false;
     }
   }
+  function alignSelectedWall(axis: 'horizontal' | 'vertical') {
+    if (!selectedWall) return;
+    try {
+      const next = alignWall(project, selectedWall.id, axis);
+      if (next === project) { notify(`Wall is already ${axis}`); return; }
+      commit(next);
+      notify(`Wall aligned ${axis} · Undo to restore`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not align this wall');
+    }
+  }
   function repairExistingWallJunctions() {
     try {
       const next = repairWallTopology(project);
@@ -905,6 +916,11 @@ export default function App() {
             <section className="wall-basic-section"><h3>Basic parameters</h3><div className="wall-basic-row"><span>Total floor area</span><b>{area.toFixed(2)} {areaUnit}</b></div><div className="wall-basic-row"><span>Rooms</span><b>{visibleProject.rooms.length}</b></div></section>
             <section className="wall-settings-section"><h3>Wall settings</h3><div className="wall-fields">
               <label>Size<div className="unit-input"><input readOnly value={distance(selectedWall.start, selectedWall.end).toFixed(2)} /><span>{project.units}</span></div></label>
+              <div className="wall-align-control" role="group" aria-label="Align selected wall">
+                <strong>Align to plan axis</strong>
+                <div><button className="rotate-btn" aria-label="Align wall horizontally" onClick={() => alignSelectedWall('horizontal')}>Horizontal</button><button className="rotate-btn" aria-label="Align wall vertically" onClick={() => alignSelectedWall('vertical')}>Vertical</button></div>
+                <small>Keeps the wall midpoint and length; connected geometry is validated.</small>
+              </div>
               <label>Wall finish<div className="current-material"><span style={{ background: selectedWallMaterial?.color ?? '#d2d0ca' }} />{selectedWallMaterial?.name ?? 'Default'}</div></label>
               <button className="rotate-btn" onClick={() => setPanel('finish')}>Choose wall finish in Finishes</button>
               <NumericField label="Start X" value={selectedWall.start.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editWallEndpoints(selectedWall.id, { start: { ...selectedWall.start, x: value } })} />

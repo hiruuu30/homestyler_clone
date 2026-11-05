@@ -1,8 +1,12 @@
 # Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds explicit-save 3D camera persistence and a transient, snap-aware 2D ruler to the existing room-constrained furniture placement, duplication and atomic-array work, alongside linked floor voids, the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); its status is not rechecked for this GitHub-only increment. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The latest local increment adds validated horizontal/vertical wall alignment to saved-camera persistence, the transient 2D ruler, constrained furniture placement and other independent editor features. The public alias is not checked for this GitHub-only work. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
 
-## Current milestone: command bar and active-floor clearing
+## Current milestone: selected-wall alignment
+
+Selected walls can be aligned horizontally or vertically without changing their midpoint or length. Existing junction and opening validation applies; full reference semantics remain unknown. See the implementation notes below.
+
+## Prior milestone: measured command bar and active-floor clearing
 
 The command order and desktop geometry were measured from the authenticated reference editor: File, Save, Undo, Redo, Clear, Construction, Tools, View, AI Tools, Export, Images and Render. At a 1280×649 viewport the central bar is positioned at x335.3125/y0 and measures 609.375×45 pixels. Its File menu is at x342.3125/y49.578125 and measures 168×262 pixels, with the observed row heights and separators. Chromium checks these bounds numerically. Glyphs, fonts, every menu's content and the complete interface are **not** certified pixel-identical.
 
@@ -15,6 +19,10 @@ Clear Furniture, Clear Interior Finish and their combined command affect **only 
 A room's ceiling has a separate material assignment and independent generic wood/tile mapping: color overlay, rotation, horizontal/vertical offsets and independent X/Y scale. Select Floor or Ceiling in Finishes to edit that surface. Ceiling textures render in 3D and export as SVG metadata without changing the 2D floor fill. Unit conversion preserves physical offsets; older projects default to no ceiling pattern. This is procedural generic rendering, not Homestyler's textured/PBR material system.
 
 In 2D Select mode, drag a hosted door/window along its wall to change its normalized position. Movement previews and clamps to the host wall; the existing model validation rejects invalid opening conflicts. A completed move is one undoable edit and survives local Save/reload. Corresponding full reference behavior remains unverified.
+
+## Selected-wall alignment
+
+Select a wall and choose **Horizontal** or **Vertical** under **Align to plan axis**. The local operation keeps the wall's midpoint, length, and endpoint direction, then uses the existing connected-endpoint and hosted-opening validation. It rejects collinear overlap rather than leaving ambiguous wall geometry. The edit is one Undo/Redo step and persists through explicit local Save/reload. The Homestyler Align control was observed, but its semantics were not exercised; this is an independently defined operation, not recovered reference behavior.
 
 ## Structural openings across floors
 
@@ -44,7 +52,7 @@ The editor also supports rectangular and concave polygon rooms, snapping, wall t
 
 - **Verified full-parity completion: 0%.** No complete feature/state suite has passed exact functional and pixel-level comparison. This is not an estimate of how much independent code has been written.
 - **Original catalog asset coverage: 0%.** No original Homestyler models, materials or textures are present.
-- **Local checks:** 146 tests pass across 14 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. Isolated Chromium smokes verify the ruler; saved-camera orbit, Shift-pan and zoom; local Save/Save As; Fit reset; and identical 3D canvas pixels after switching views and reopening at the same viewport. Existing editor, furniture/array, and linked-opening smokes also pass with zero page errors. No Homestyler comparison was performed for these local behaviors.
+- **Local checks:** 149 tests pass across 14 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. The wall-alignment Chromium smoke verifies horizontal/vertical alignment, preserved center and length, Undo/Redo, local Save/reload, a nonzero 3D canvas, and zero page errors. Other isolated smokes verify the ruler; saved-camera orbit, Shift-pan and zoom; local Save/Save As; Fit reset; and identical 3D canvas pixels after switching views and reopening at the same viewport. No Homestyler comparison was performed for the new alignment.
 - **Earlier retained browser evidence:** independent floor/ceiling pattern persistence and opening drag/history/reload passed local Chromium checks. Ceiling/wall/furniture color checks previously measured 40,169/19,926/6,317 changed 3D pixels when undoing those color assignments.
 - **Publishing:** approved increments are pushed to GitHub main. Consult the latest deployment ledger record for the exact public bundle verification; a source push alone is not proof that the public alias has updated.
 - **PingFusi:** authenticated CLI preflight passes. The captured numeric command-bar/File-menu measurements are bounded evidence, not an independent review verdict or whole-editor pixel acceptance. The existing hosted review draft has no confirmed round receipt or verdict; no duplicate was filed. No matched reference state was available for the new structural-opening workflow.
@@ -53,7 +61,7 @@ Significant scope remains incomplete: broader topology, original catalog/materia
 
 ## Local verification
 
-Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-camera-persistence.py`, `python3 scripts/smoke-ruler.py`, `python3 scripts/smoke-furniture-placement.py`, `python3 scripts/smoke-editor-commands.py`, or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. The camera smoke also requires Pillow. Pass `--url` or `--executable` to override their defaults.
+Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-wall-alignment.py`, `python3 scripts/smoke-camera-persistence.py`, `python3 scripts/smoke-ruler.py`, `python3 scripts/smoke-furniture-placement.py`, `python3 scripts/smoke-editor-commands.py`, or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. The camera smoke also requires Pillow. Pass `--url` or `--executable` to override their defaults.
 
 ## Project files
 

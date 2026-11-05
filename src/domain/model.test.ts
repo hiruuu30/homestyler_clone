@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  alignWall,
   addLevel,
   addFurniture,
   addWall,
@@ -238,6 +239,48 @@ describe('domain model', () => {
     expect(wall).toMatchObject({ thickness: original.thickness, height: original.height, materialId: original.materialId, levelId: original.levelId });
     expect(project.walls.find((item) => item.id === original.id)).toEqual(original);
     expect(Object.isFrozen(wall.start)).toBe(true);
+  });
+
+  it('aligns a wall horizontally or vertically while preserving its midpoint, length, and endpoint direction', () => {
+    const base = createStarterProject();
+    const diagonal = createWall('diagonal', { x: 0, y: 6 }, { x: 3, y: 10 }, undefined, undefined, undefined, base.activeLevelId);
+    const project = { ...base, rooms: [], walls: [diagonal], wallOpenings: [] };
+    const horizontal = alignWall(project, diagonal.id, 'horizontal');
+    const horizontalWall = horizontal.walls[0];
+    const vertical = alignWall(project, diagonal.id, 'vertical');
+    const verticalWall = vertical.walls[0];
+
+    expect(horizontalWall.start).toMatchObject({ x: -1, y: 8 });
+    expect(horizontalWall.end).toMatchObject({ x: 4, y: 8 });
+    expect(Math.hypot(horizontalWall.end.x - horizontalWall.start.x, horizontalWall.end.y - horizontalWall.start.y)).toBeCloseTo(5);
+    expect(verticalWall.start).toMatchObject({ x: 1.5, y: 5.5 });
+    expect(verticalWall.end).toMatchObject({ x: 1.5, y: 10.5 });
+    expect(Math.hypot(verticalWall.end.x - verticalWall.start.x, verticalWall.end.y - verticalWall.start.y)).toBeCloseTo(5);
+    expect(alignWall(horizontal, diagonal.id, 'horizontal')).toBe(horizontal);
+    expect(project.walls[0]).toEqual(diagonal);
+  });
+
+  it('preserves a hosted opening when aligning a wall of unchanged length', () => {
+    const base = createStarterProject();
+    const diagonal = createWall('diagonal', { x: 0, y: 6 }, { x: 3, y: 10 }, undefined, undefined, undefined, base.activeLevelId);
+    const project = { ...base, rooms: [], walls: [diagonal], wallOpenings: [] };
+    const withWindow = addWallOpening(project, diagonal.id, 'window');
+    const aligned = alignWall(withWindow, diagonal.id, 'horizontal');
+
+    expect(aligned.wallOpenings).toEqual(withWindow.wallOpenings);
+    expect(aligned.walls[0].start.y).toBe(aligned.walls[0].end.y);
+  });
+
+  it('rejects an alignment that would overlap another wall without changing the input', () => {
+    const base = createStarterProject();
+    const host = createWall('host', { x: -1, y: 5 }, { x: 5, y: 5 }, undefined, undefined, undefined, base.activeLevelId);
+    const diagonal = createWall('diagonal', { x: 0, y: 4 }, { x: 4, y: 6 }, undefined, undefined, undefined, base.activeLevelId);
+    const project = { ...base, rooms: [], walls: [host, diagonal], wallOpenings: [] };
+    const withWindow = addWallOpening(project, host.id, 'window');
+
+    expect(() => alignWall(withWindow, diagonal.id, 'horizontal')).toThrow(/overlap/);
+    expect(withWindow.walls).toEqual([host, diagonal]);
+    expect(withWindow.wallOpenings[0].wallId).toBe(host.id);
   });
 
   it('normalizes X crossings created by endpoint edits and rejects opening cuts atomically', () => {

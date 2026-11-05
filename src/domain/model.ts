@@ -1370,6 +1370,55 @@ export function updateWallEndpoints(project: DesignProject, wallId: string, chan
   return next;
 }
 
+export type WallAlignment = 'horizontal' | 'vertical';
+
+/** Align a wall to a plan axis while preserving its midpoint, length, and endpoint direction. */
+export function alignWall(project: DesignProject, wallId: string, axis: WallAlignment): DesignProject {
+  id(wallId, 'wall id');
+  if (axis !== 'horizontal' && axis !== 'vertical') throw new TypeError('wall alignment must be horizontal or vertical');
+  const wall = project.walls.find((item) => item.id === wallId);
+  if (!wall) throw new RangeError(`unknown wall: ${wallId}`);
+  const dx = wall.end.x - wall.start.x;
+  const dy = wall.end.y - wall.start.y;
+  const length = Math.hypot(dx, dy);
+  const middle = { x: (wall.start.x + wall.end.x) / 2, y: (wall.start.y + wall.end.y) / 2 };
+  const direction = axis === 'horizontal' ? (dx >= 0 ? 1 : -1) : (dy >= 0 ? 1 : -1);
+  const half = length / 2;
+  const start = axis === 'horizontal'
+    ? { x: middle.x - direction * half, y: middle.y }
+    : { x: middle.x, y: middle.y - direction * half };
+  const end = axis === 'horizontal'
+    ? { x: middle.x + direction * half, y: middle.y }
+    : { x: middle.x, y: middle.y + direction * half };
+  if (start.x === wall.start.x && start.y === wall.start.y && end.x === wall.end.x && end.y === wall.end.y) return project;
+
+  const updated = updateWallEndpoints(project, wallId, { start, end });
+  const changedIds = new Set(updated.walls.filter((candidate) => {
+    const previous = project.walls.find((item) => item.id === candidate.id);
+    return !previous || previous.start.x !== candidate.start.x || previous.start.y !== candidate.start.y
+      || previous.end.x !== candidate.end.x || previous.end.y !== candidate.end.y;
+  }).map((candidate) => candidate.id));
+  for (let first = 0; first < updated.walls.length; first += 1) {
+    const left = updated.walls[first];
+    for (let second = first + 1; second < updated.walls.length; second += 1) {
+      const right = updated.walls[second];
+      if ((!changedIds.has(left.id) && !changedIds.has(right.id)) || left.levelId !== right.levelId) continue;
+      const overlapLength = Math.hypot(left.end.x - left.start.x, left.end.y - left.start.y);
+      const lengthSquared = overlapLength * overlapLength;
+      const collinear = Math.abs(cross(left.start, left.end, right.start)) <= 1e-8 * overlapLength
+        && Math.abs(cross(left.start, left.end, right.end)) <= 1e-8 * overlapLength;
+      if (!collinear || lengthSquared === 0) continue;
+      const projection = (pointValue: Point) => ((pointValue.x - left.start.x) * (left.end.x - left.start.x)
+        + (pointValue.y - left.start.y) * (left.end.y - left.start.y)) / lengthSquared;
+      const rightStart = projection(right.start);
+      const rightEnd = projection(right.end);
+      const shared = Math.min(1, Math.max(rightStart, rightEnd)) - Math.max(0, Math.min(rightStart, rightEnd));
+      if (shared > 1e-8) throw new RangeError('aligned wall would overlap another wall');
+    }
+  }
+  return updated;
+}
+
 export function setFurnitureHidden(project: DesignProject, furnitureId: string, hidden: boolean): DesignProject {
   id(furnitureId, 'furniture id');
   if (typeof hidden !== 'boolean') throw new TypeError('hidden must be a boolean');

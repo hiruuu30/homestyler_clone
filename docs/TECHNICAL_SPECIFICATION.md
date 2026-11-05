@@ -135,3 +135,7 @@ Verification: all 47 unit tests pass and the TypeScript/Vite production build su
 
 
 Production verification: code commit `e652684` is deployed to the production target. Vercel reports state `READY`, aliases include `homestyler-clone.vercel.app`, and `aliasError` is null. The public app returns HTTP 200 and its JavaScript bundle is byte-identical to the local build (SHA-256 `f38714593c84430408d0585117e7eda4efa5b18ce0f893403ee19c136ae768cc`); the bundle contains both SVG and CSV export controls. This confirms deployment content, not Homestyler behavior or parity.
+
+## Local implementation follow-up — selected-wall alignment · 2026-11-05
+
+The wall inspector now offers local horizontal and vertical alignment. It keeps the selected segment midpoint, length, and endpoint direction, passes edits through existing junction/room/opening validation, and rejects collinear overlap without changing the input project. Unit and isolated Chromium checks cover both axes, opening preservation, atomic rejection, Undo/Redo, explicit local Save/reload, and a nonzero 3D scene with no page errors. The complete local suite passes 149 tests across 14 files and the strict TypeScript/Vite build succeeds. The reference Align control was visible but its behavior was not exercised; no reference-matched PingFusi comparison was made. This local behavior is not a Homestyler-parity result; complete parity remains 0% verified and original catalog coverage remains deferred at 0%.
