@@ -15,6 +15,7 @@ import type {
   WallOpeningKind,
 } from './types';
 import { ceilingFinishForRoom, floorFinishForRoom, normalizeFloorFinishMapping } from './floor-finish';
+import { assertFurniturePlacement } from './furniture-placement';
 
 const DEFAULT_WALL_THICKNESS = 0.12;
 const DEFAULT_WALL_HEIGHT = 2.4;
@@ -1110,10 +1111,13 @@ export function rotateFurniture(
     const furnitureId = id(furnitureIdOrDegrees as string, 'furniture id');
     const degrees = maybeDegrees as number;
     if (!Number.isFinite(degrees)) throw new TypeError('rotation degrees must be finite');
-    if (!subject.furniture.some((item) => item.id === furnitureId)) throw new RangeError(`unknown furniture: ${furnitureId}`);
-    return copyProject(subject, {
+    const current = subject.furniture.find((item) => item.id === furnitureId);
+    if (!current) throw new RangeError(`unknown furniture: ${furnitureId}`);
+    const next = copyProject(subject, {
       furniture: subject.furniture.map((item) => item.id === furnitureId ? freeze({ ...item, rotation: item.rotation + degrees }) : item),
     });
+    assertFurniturePlacement(next, next.furniture.find((item) => item.id === furnitureId)!);
+    return next;
   }
   const degrees = furnitureIdOrDegrees as number;
   if (!Number.isFinite(degrees)) throw new TypeError('rotation degrees must be finite');
@@ -1123,10 +1127,14 @@ export function rotateFurniture(
 export function moveFurniture(project: DesignProject, furnitureId: string, position: Point): DesignProject {
   id(furnitureId, 'furniture id');
   const nextPosition = point(position, 'furniture position');
-  if (!project.furniture.some((item) => item.id === furnitureId)) throw new RangeError(`unknown furniture: ${furnitureId}`);
-  return copyProject(project, {
+  const current = project.furniture.find((item) => item.id === furnitureId);
+  if (!current) throw new RangeError(`unknown furniture: ${furnitureId}`);
+  if (current.position.x === nextPosition.x && current.position.y === nextPosition.y) return project;
+  const next = copyProject(project, {
     furniture: project.furniture.map((item) => item.id === furnitureId ? freeze({ ...item, position: nextPosition }) : item),
   });
+  assertFurniturePlacement(next, next.furniture.find((item) => item.id === furnitureId)!);
+  return next;
 }
 
 export type FurnitureChanges = Partial<Pick<FurnitureInstance, 'position' | 'elevation' | 'rotation' | 'rotationX' | 'rotationZ' | 'width' | 'depth' | 'height' | 'color'>>;
@@ -1144,9 +1152,13 @@ export function updateFurniture(project: DesignProject, furnitureId: string, cha
   if (changes.height !== undefined) positive(changes.height, 'furniture height');
   if (changes.color !== undefined) id(changes.color, 'furniture color');
   const normalized = changes.position === undefined ? changes : { ...changes, position: point(changes.position, 'furniture position') };
-  return copyProject(project, {
+  const next = copyProject(project, {
     furniture: project.furniture.map((item) => item.id === furnitureId ? freeze({ ...item, ...normalized }) : item),
   });
+  if (changes.position !== undefined || changes.rotation !== undefined || changes.width !== undefined || changes.depth !== undefined) {
+    assertFurniturePlacement(next, next.furniture.find((item) => item.id === furnitureId)!);
+  }
+  return next;
 }
 
 export function duplicateFurniture(project: DesignProject, furnitureId: string): DesignProject {

@@ -4,6 +4,8 @@ import { frameProjectCamera } from '../domain/camera';
 import { wallSolidSegments } from '../domain/wall-openings';
 import type { DesignProject, FloorFinishMapping, Level, Material, Point, Room, Units } from '../domain/types';
 import { ceilingFinishForRoom, floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
+import { canPlaceFurniture } from '../domain/furniture-placement';
+import { snapFurniturePosition } from '../domain/snapping';
 
 export type SceneViewportProps = {
   project: DesignProject;
@@ -292,6 +294,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
     let dragFurnitureId: string | null = null;
     let dragMesh: THREE.Mesh | null = null;
     let originalPosition: Point | null = null;
+    let originalColor: THREE.Color | null = null;
     let dragOffset: Point | null = null;
     let currentPosition: Point | null = null;
     const updatePointerRay = (event: PointerEvent) => {
@@ -312,6 +315,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       dragFurnitureId = null;
       dragMesh = null;
       originalPosition = null;
+      originalColor = null;
       dragOffset = null;
       currentPosition = null;
       canvas.setPointerCapture(event.pointerId);
@@ -324,6 +328,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
         dragFurnitureId = furniture.id;
         dragMesh = hit.object as THREE.Mesh;
         originalPosition = furniture.position;
+        originalColor = dragMesh.material instanceof THREE.MeshStandardMaterial ? dragMesh.material.color.clone() : null;
         dragOffset = { x: furniture.position.x - ground.x, y: furniture.position.y + ground.z };
         currentPosition = furniture.position;
         canvas.style.cursor = 'grabbing';
@@ -337,12 +342,17 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       if (dragFurnitureId && dragMesh && dragOffset) {
         const ground = floorPoint(event);
         if (ground) {
-          const next = { x: ground.x + dragOffset.x, y: -ground.z + dragOffset.y };
-          if (originalPosition && Math.hypot(next.x - originalPosition.x, next.y - originalPosition.y) > 0.02) {
+          const rawNext = { x: ground.x + dragOffset.x, y: -ground.z + dragOffset.y };
+          const next = snapFurniturePosition(rawNext, 0.15 * (project.units === 'ft' ? 1 / 0.3048 : 1), project.units);
+          if (originalPosition && Math.hypot(rawNext.x - originalPosition.x, rawNext.y - originalPosition.y) > 0.02) {
             movedObject = true;
             currentPosition = next;
             dragMesh.position.x = next.x;
             dragMesh.position.z = -next.y;
+            if (dragMesh.material instanceof THREE.MeshStandardMaterial && originalColor) {
+              const valid = canPlaceFurniture(project, dragFurnitureId, next);
+              dragMesh.material.color.copy(valid ? originalColor : new THREE.Color('#e78383'));
+            }
           }
         }
       } else if (event.buttons === 1) {
@@ -366,6 +376,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       dragFurnitureId = null;
       dragMesh = null;
       originalPosition = null;
+      originalColor = null;
       dragOffset = null;
       currentPosition = null;
       canvas.style.cursor = '';
@@ -377,6 +388,14 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       const nextPosition = currentPosition;
       const shouldMoveObject = movedObject;
       const shouldSelectByClick = !moved;
+      const mesh = dragMesh;
+      const origin = originalPosition;
+      const color = originalColor;
+      if (mesh && origin) {
+        mesh.position.x = origin.x;
+        mesh.position.z = -origin.y;
+        if (mesh.material instanceof THREE.MeshStandardMaterial && color) mesh.material.color.copy(color);
+      }
       clearDrag();
       if (furnitureId) {
         onSelect(furnitureId);
@@ -392,6 +411,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       if (dragMesh && originalPosition) {
         dragMesh.position.x = originalPosition.x;
         dragMesh.position.z = -originalPosition.y;
+        if (dragMesh.material instanceof THREE.MeshStandardMaterial && originalColor) dragMesh.material.color.copy(originalColor);
       }
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       clearDrag();

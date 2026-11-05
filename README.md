@@ -1,6 +1,6 @@
 # Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds undoable structural floor voids across aligned levels, on top of the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); release revisions and bundle checks are recorded in the feature ledger. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds conservative room-constrained furniture movement with collision rejection and local snapping, alongside linked floor voids, the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); its status is not rechecked for this GitHub-only increment. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
 
 ## Current milestone: command bar and active-floor clearing
 
@@ -20,15 +20,21 @@ In 2D Select mode, drag a hosted door/window along its wall to change its normal
 
 Select a room, choose an upper floor, and trace a polygon to create a linked floor-surface void on the source floor and every intervening floor through the target. The footprint must fit fully inside exactly one room on each level; grouped removal, Undo/Redo, JSON save/reload, unit conversion, and participating-floor deletion preserve the link. The 3D viewport still shows one active floor at a time: this does not add stair geometry, guards/framing, shaft walls, or a simultaneous stacked-floor view. No matched Homestyler structural-opening reference was available, so this is an independent generic feature, not a behavior or visual-parity claim.
 
+## Constrained furniture placement
+
+Dragging a furniture object in 2D or 3D snaps its center to a local 10 cm grid when the cursor lands within tolerance. New moves and numeric position, width, depth, or plan-rotation edits must keep the rotated footprint fully inside its assigned room on its existing floor, outside room holes, away from wall thickness, and clear of other visible furniture. Hidden furniture does not block placement. Invalid drag previews turn red; dropping there leaves the project and undo history unchanged. Valid moves remain one shared Undo/Redo edit.
+
+These are conservative rules for this independent editor, not recovered Homestyler semantics. The editor does not automatically reassign rooms, repair legacy placements, or apply these checks to the separate duplicate/array creation paths. Existing stored placements remain untouched until edited; exact visual and behavioral parity is unverified.
+
 ## Other implemented capabilities
 
-The editor also supports rectangular and concave polygon rooms, snapping, wall topology repair and collinear joins, editable wall properties, multiple floors, single-floor and linked structural floor openings, translucent 3D ceilings, procedural floor mapping, furniture transforms and arrays, hidden-object recovery, plan underlays, unit conversion, and SVG/CSV/JSON exports. These generic implementations do not establish equivalent Homestyler behavior.
+The editor also supports rectangular and concave polygon rooms, snapping, wall topology repair and collinear joins, editable wall properties, multiple floors, single-floor and linked structural floor openings, translucent 3D ceilings, procedural floor mapping, constrained furniture transforms and arrays, hidden-object recovery, plan underlays, unit conversion, and SVG/CSV/JSON exports. These generic implementations do not establish equivalent Homestyler behavior.
 
 ## Verification and boundaries
 
 - **Verified full-parity completion: 0%.** No complete feature/state suite has passed exact functional and pixel-level comparison. This is not an estimate of how much independent code has been written.
 - **Original catalog asset coverage: 0%.** No original Homestyler models, materials or textures are present.
-- **Local checks:** 127 tests pass across 12 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. Isolated Chromium verifies the measured toolbar/File-menu bounds, menu keyboard/checkbox semantics, file import/downloads, all three multi-floor bulk clears, structural void drawing across two floors, grouped Undo/Redo, Save/reload, participating-floor deletion/restore, 3D mounting and narrow-viewport menu visibility, with no page errors.
+- **Local checks:** 137 tests pass across 13 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. A dedicated isolated Chromium smoke verifies 2D/3D furniture placement: 10 cm snapping, invalid room-boundary drops rejected/rolled back, valid moves, 2D Undo/Redo, and Save with no page errors. The broader editor/structural-opening smoke results remain documented in the feature ledger; no Homestyler comparison was performed for these local rules.
 - **Earlier retained browser evidence:** independent floor/ceiling pattern persistence and opening drag/history/reload passed local Chromium checks. Ceiling/wall/furniture color checks previously measured 40,169/19,926/6,317 changed 3D pixels when undoing those color assignments.
 - **Publishing:** approved increments are pushed to GitHub main. Consult the latest deployment ledger record for the exact public bundle verification; a source push alone is not proof that the public alias has updated.
 - **PingFusi:** authenticated CLI preflight passes. The captured numeric command-bar/File-menu measurements are bounded evidence, not an independent review verdict or whole-editor pixel acceptance. The existing hosted review draft has no confirmed round receipt or verdict; no duplicate was filed. No matched reference state was available for the new structural-opening workflow.
@@ -37,7 +43,7 @@ Significant scope remains incomplete: broader topology, original catalog/materia
 
 ## Local verification
 
-Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-editor-commands.py` or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. Pass `--url` or `--executable` to override their defaults.
+Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-furniture-placement.py`, `python3 scripts/smoke-editor-commands.py`, or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. Pass `--url` or `--executable` to override their defaults.
 
 ## Project files
 

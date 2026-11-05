@@ -602,28 +602,39 @@ describe('domain model', () => {
 
   it('places and incrementally rotates furniture in a project', () => {
     const project = createStarterProject();
-    const withFurniture = addFurniture(project, furniture);
+    const withFurniture = addFurniture(project, { ...furniture, position: { x: 5.2, y: 0.8 } });
     const rotated = rotateFurniture(withFurniture, 'chair-1', 45);
     expect(withFurniture.furniture).toHaveLength(1);
     expect(withFurniture.furniture[0]).toMatchObject({ rotationX: 0, rotationZ: 0 });
-    expect(rotated.furniture[0]).toMatchObject({ id: 'chair-1', position: { x: 1, y: 1 }, rotation: 45 });
+    expect(rotated.furniture[0]).toMatchObject({ id: 'chair-1', position: { x: 5.2, y: 0.8 }, rotation: 45 });
     expect(project.furniture).toHaveLength(0);
   });
 
   it('moves one furniture instance immutably while preserving its other properties', () => {
     const project = addFurniture(createStarterProject(), furniture);
-    const moved = moveFurniture(project, 'chair-1', { x: 2.25, y: 1.75 });
+    const moved = moveFurniture(project, 'chair-1', { x: 5.2, y: 1.2 });
 
     expect(moved.furniture[0]).toMatchObject({
-      id: 'chair-1', position: { x: 2.25, y: 1.75 }, rotation: 0, width: 0.6, roomId: 'room-starter',
+      id: 'chair-1', position: { x: 5.2, y: 1.2 }, rotation: 0, width: 0.6, roomId: 'room-starter',
     });
     expect(project.furniture[0].position).toEqual({ x: 1, y: 1 });
     expect(moved.rooms).toEqual(project.rooms);
     expect(Object.isFrozen(moved)).toBe(true);
   });
 
+  it('returns the same project for a same-position move', () => {
+    const project = addFurniture(createStarterProject(), { ...furniture, position: { x: 5.2, y: 0.8 } });
+    expect(moveFurniture(project, 'chair-1', { x: 5.2, y: 0.8 })).toBe(project);
+  });
+
   it('rejects a move to an unknown furniture ID', () => {
     expect(() => moveFurniture(createStarterProject(), 'missing', { x: 1, y: 1 })).toThrow(/unknown furniture/);
+  });
+
+  it('rejects moves outside the assigned room without mutating the existing project', () => {
+    const project = addFurniture(createStarterProject(), furniture);
+    expect(() => moveFurniture(project, 'chair-1', { x: 6.05, y: 0.8 })).toThrow(/assigned room/);
+    expect(project.furniture[0].position).toEqual({ x: 1, y: 1 });
   });
 
   it('rejects non-finite furniture move coordinates', () => {
@@ -634,11 +645,17 @@ describe('domain model', () => {
   it('updates dimensions, position and rotation without changing the original instance', () => {
     const project = addFurniture(createStarterProject(), furniture);
     const updated = updateFurniture(project, 'chair-1', {
-      position: { x: -0.5, y: 2 }, width: 1.2, rotation: 90,
+      position: { x: 5.2, y: 1.2 }, width: 1.2, rotation: 90,
     });
 
-    expect(updated.furniture[0]).toMatchObject({ position: { x: -0.5, y: 2 }, width: 1.2, rotation: 90 });
+    expect(updated.furniture[0]).toMatchObject({ position: { x: 5.2, y: 1.2 }, width: 1.2, rotation: 90 });
     expect(project.furniture[0]).toMatchObject({ position: { x: 1, y: 1 }, width: 0.6, rotation: 0 });
+  });
+
+  it('rejects a numeric footprint edit that would extend beyond the assigned room', () => {
+    const project = addFurniture(createStarterProject(), { ...furniture, position: { x: 5.2, y: 0.8 } });
+    expect(() => updateFurniture(project, 'chair-1', { width: 2.2 })).toThrow(/assigned room/);
+    expect(project.furniture[0].width).toBe(0.6);
   });
 
   it('changes only the selected furniture color without mutating the original project', () => {

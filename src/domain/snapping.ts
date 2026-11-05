@@ -1,4 +1,4 @@
-import type { DesignProject, Point } from './types';
+import type { DesignProject, Point, Units } from './types';
 
 export function snapPlanPoint(
   project: Pick<DesignProject, 'rooms' | 'walls'>,
@@ -47,4 +47,17 @@ export function snapPlanPoint(
   }
 
   return nearest === undefined ? candidate : { x: nearest.x, y: nearest.y };
+}
+
+/** Snap furniture centers to a subtle 10 cm grid only when already within the caller's tolerance. */
+export function snapFurniturePosition(position: Point, tolerance: number, units: Units = 'm'): Point {
+  if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) throw new TypeError('furniture snap coordinates must be finite numbers');
+  if (!Number.isFinite(tolerance) || tolerance < 0) throw new RangeError('furniture snap tolerance must be a finite non-negative number');
+  if (units !== 'm' && units !== 'ft') throw new TypeError('units must be m or ft');
+  const grid = units === 'ft' ? 0.1 / 0.3048 : 0.1;
+  const snapAxis = (value: number) => {
+    const target = Math.round(value / grid) * grid;
+    return Math.abs(target - value) <= tolerance ? Number(target.toFixed(9)) : value;
+  };
+  return { x: snapAxis(position.x), y: snapAxis(position.y) };
 }

@@ -32,7 +32,7 @@ async def run(url, executable):
             return toolbar.get_by_role('button', name=name, exact=True)
 
         async def focus_is(locator):
-            assert await locator.evaluate('(element) => document.activeElement === element'), await locator.get_attribute('aria-label') or await locator.inner_text()
+            await expect(locator).to_be_focused()
 
         async def menu(trigger, item, role='menuitem'):
             await (await command(trigger)).click()
@@ -84,13 +84,38 @@ async def run(url, executable):
         checks.append('exact measured toolbar/File-menu bounds; disabled-aware keyboard navigation; checkbox and dismissal semantics')
 
         await page.get_by_title('Add sofa', exact=True).click()
-        await page.get_by_label('Width', exact=True).fill('2.35')
+        await page.get_by_label('Width', exact=True).fill('1.6')
         await page.keyboard.press('Control+s')
-        await page.wait_for_function('''() => Object.values(localStorage).some(value => {try {return JSON.parse(value).furniture?.[0]?.width === 2.35} catch {return false}})''')
+        await page.wait_for_function('''() => Object.values(localStorage).some(value => {try {return JSON.parse(value).furniture?.[0]?.width === 1.6} catch {return false}})''')
         await page.get_by_label('Width', exact=True).focus()
         async with page.expect_download() as keyboard_download:
             await page.keyboard.press('Control+Shift+s')
-        assert json.loads(Path(await (await keyboard_download.value).path()).read_text())['furniture'][0]['width'] == 2.35
+        assert json.loads(Path(await (await keyboard_download.value).path()).read_text())['furniture'][0]['width'] == 1.6
+        sofa = page.locator('.plan-furniture').first
+        origin = await sofa.evaluate('''element => {
+          const center = new DOMPoint(0, 0).matrixTransform(element.getScreenCTM());
+          const matrix = element.ownerSVGElement.getScreenCTM();
+          return {x:center.x,y:center.y,ux:matrix.a,uy:matrix.b};
+        }''')
+        await page.mouse.move(origin['x'], origin['y'])
+        await page.mouse.down()
+        await page.mouse.move(origin['x'] + origin['ux'] * 1.4, origin['y'] + origin['uy'] * 1.4, steps=6)
+        await expect(sofa).to_have_attribute('data-placement-valid', 'false')
+        await page.mouse.up()
+        await expect(page.locator('.toast')).to_contain_text('fully inside its assigned room')
+        rejected = await save()
+        assert abs(rejected['furniture'][0]['position']['x'] - 5.2) < 1e-6, rejected['furniture'][0]
+        await page.mouse.move(origin['x'], origin['y'])
+        await page.mouse.down()
+        await page.mouse.move(origin['x'] + origin['ux'] * 0.1, origin['y'] + origin['uy'] * 0.1, steps=4)
+        await page.mouse.up()
+        moved = await save()
+        assert abs(moved['furniture'][0]['position']['x'] - 5.3) < 1e-6, moved['furniture'][0]
+        await (await command('Undo')).click()
+        assert abs((await save())['furniture'][0]['position']['x'] - 5.2) < 1e-6
+        await (await command('Redo')).click()
+        assert abs((await save())['furniture'][0]['position']['x'] - 5.3) < 1e-6
+        checks.append('furniture move snaps to the 10 cm grid; room-invalid drag previews turn red and reject without history; valid move supports Undo/Redo and save')
         checks.append('Ctrl S commits focused numeric edits before saving; Ctrl Shift S exports from focused fields')
         original = await save()
         ground = original['levels'][0]['id']

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
-import { snapPlanPoint } from '../domain/snapping';
+import { snapFurniturePosition, snapPlanPoint } from '../domain/snapping';
+import { canPlaceFurniture } from '../domain/furniture-placement';
 import type { DesignProject, FurnitureInstance, Point, ToolMode } from '../domain/types';
 import { floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
 import { resizeOpeningFromEdge } from '../domain/wall-openings';
@@ -144,7 +145,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
     const start = modelPoint(event.clientX, event.clientY);
     if (!start) return;
     capture(event);
-    setDrag({ mode: 'move', start, current: start, furnitureId: item.id, origin: item.position });
+    setDrag({ mode: 'move', start, current: item.position, furnitureId: item.id, origin: item.position });
   };
 
   const beginOpeningDrag = (event: ReactPointerEvent<SVGGElement>, opening: DesignProject['wallOpenings'][number], wall: DesignProject['walls'][number]) => {
@@ -270,7 +271,15 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       return;
     }
     const point = modelPoint(event.clientX, event.clientY);
-    if (point) setDrag({ ...drag, current: drag.mode === 'create' ? snapPoint(point) : point });
+    if (!point) return;
+    if (drag.mode === 'create') setDrag({ ...drag, current: snapPoint(point) });
+    else if (drag.mode === 'move') {
+      const position = snapFurniturePosition({
+        x: drag.origin.x + point.x - drag.start.x,
+        y: drag.origin.y + point.y - drag.start.y,
+      }, snapDistance(), project.units);
+      setDrag({ ...drag, current: position });
+    } else setDrag({ ...drag, current: point });
   };
 
   const finishDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -280,7 +289,7 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
       return;
     }
-    const point = modelPoint(event.clientX, event.clientY) ?? drag.current;
+    const point = modelPoint(event.clientX, event.clientY) ?? drag.start;
     const end = drag.mode === 'create' ? snapPoint(point) : point;
     if (drag.mode === 'create') {
       if (distance(end, drag.start) > 0.05 * unitsPerMetre) {
@@ -289,10 +298,10 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       }
     } else if (drag.mode === 'move') {
       if (distance(end, drag.start) > 0.05 * unitsPerMetre) {
-        onMoveFurniture(drag.furnitureId, {
+        onMoveFurniture(drag.furnitureId, snapFurniturePosition({
           x: drag.origin.x + end.x - drag.start.x,
           y: drag.origin.y + end.y - drag.start.y,
-        });
+        }, snapDistance(), project.units));
       }
     } else if (drag.mode === 'move-opening') {
       const center = draggedOpeningCenter(drag, end);
@@ -467,18 +476,19 @@ export function PlanCanvas({ project, tool, selectedId, onSelect, onCreateRoom, 
       })}
       {project.furniture.filter((item) => !item.hidden).map((item) => {
         const moving = drag?.mode === 'move' && drag.furnitureId === item.id ? drag : null;
-        const x = item.position.x + (moving ? moving.current.x - moving.start.x : 0);
-        const y = item.position.y + (moving ? moving.current.y - moving.start.y : 0);
+        const position = moving ? moving.current : item.position;
+        const placementValid = !moving || canPlaceFurniture(project, item.id, position);
         return (
           <g
             key={item.id}
-            className={`plan-furniture${selectedId === item.id ? ' is-selected' : ''}`}
+            className={`plan-furniture${selectedId === item.id ? ' is-selected' : ''}${moving && !placementValid ? ' is-invalid' : ''}`}
             data-furniture-id={item.id}
-            aria-label={`${item.name}, furniture object`}
-            transform={`translate(${x} ${y}) rotate(${item.rotation})`}
+            data-placement-valid={moving ? String(placementValid) : undefined}
+            aria-label={`${item.name}, furniture object${moving && !placementValid ? ', invalid placement' : ''}`}
+            transform={`translate(${position.x} ${position.y}) rotate(${item.rotation})`}
             onPointerDown={(event) => beginFurnitureDrag(event, item)}
           >
-            <rect x={-item.width / 2} y={-item.depth / 2} width={item.width} height={item.depth} rx={0.08} fill={item.color || '#b9a58e'} />
+            <rect x={-item.width / 2} y={-item.depth / 2} width={item.width} height={item.depth} rx={0.08} fill={moving && !placementValid ? '#e78383' : item.color || '#b9a58e'} />
             <title>{item.name}</title>
           </g>
         );

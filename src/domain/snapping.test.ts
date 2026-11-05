@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRectRoom, createStarterProject } from './model';
-import { snapPlanPoint } from './snapping';
+import { snapFurniturePosition, snapPlanPoint } from './snapping';
 
 describe('plan endpoint snapping', () => {
   it('snaps to a nearby room corner or wall endpoint and leaves distant points unchanged', () => {
@@ -24,5 +24,16 @@ describe('plan endpoint snapping', () => {
 
     expect(() => snapPlanPoint(project, { x: 0, y: 0 }, -0.1)).toThrow(/non-negative/);
     expect(() => snapPlanPoint(project, { x: Number.NaN, y: 0 })).toThrow(/finite numbers/);
+  });
+
+  it('snaps furniture to a 10 cm grid in metres and feet only within tolerance', () => {
+    expect(snapFurniturePosition({ x: 1.04, y: -0.04 }, 0.05, 'm')).toEqual({ x: 1, y: 0 });
+    expect(snapFurniturePosition({ x: 1.08, y: 0.04 }, 0.01, 'm')).toEqual({ x: 1.08, y: 0.04 });
+    expect(snapFurniturePosition({ x: 0.32, y: 0.32 }, 0.01, 'ft')).toEqual({ x: 0.32808399, y: 0.32808399 });
+  });
+
+  it('rejects invalid furniture snap parameters', () => {
+    expect(() => snapFurniturePosition({ x: 0, y: 0 }, -0.1)).toThrow(/non-negative/);
+    expect(() => snapFurniturePosition({ x: Number.POSITIVE_INFINITY, y: 0 }, 0.1)).toThrow(/finite/);
   });
 });

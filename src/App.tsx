@@ -17,6 +17,7 @@ import { reconstructRoomsFromWalls } from './domain/room-reconstruction';
 import { PlanCanvas } from './components/PlanCanvas';
 import { EditorCommandBar, type MenuItem, type MenuTriggerId } from './components/EditorCommandBar';
 import { clearLevelContents } from './domain/clear-level';
+import { snapFurniturePosition } from './domain/snapping';
 const SceneViewport = lazy(() => import('./components/SceneViewport'));
 
 type ViewMode = 'plan' | '3d';
@@ -274,10 +275,22 @@ export default function App() {
   }
   function rotateSelected() {
     if (!selectedFurniture) return;
-    commit(rotateFurniture(project, selectedFurniture.id, 45));
+    try { commit(rotateFurniture(project, selectedFurniture.id, 45)); }
+    catch (error) { notify(error instanceof Error ? error.message : 'Could not rotate this object into a valid position'); }
   }
   function moveSelectedFurniture(id: string, position: Point) {
-    commit(moveFurniture(project, id, position));
+    try {
+      const snapped = snapFurniturePosition(position, 0.15 * metresToProjectUnits, project.units);
+      const next = moveFurniture(project, id, snapped);
+      if (next !== project) commit(next);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Furniture cannot be placed there');
+    }
+  }
+  function editSelectedFurniture(changes: Parameters<typeof updateFurniture>[2]) {
+    if (!selectedFurniture) return;
+    try { commit(updateFurniture(project, selectedFurniture.id, changes)); }
+    catch (error) { notify(error instanceof Error ? error.message : 'Could not update this object'); }
   }
   function duplicateSelectedFurniture() {
     if (!selectedFurniture) return;
@@ -878,13 +891,13 @@ export default function App() {
             <div className="current-material"><span style={{ background: selectedFurniture.color || '#b9a58e' }} />{selectedFurniture.color || 'Default color'}</div>
             <button className="rotate-btn" onClick={() => setPanel('finish')}>Choose finish in Finishes</button>
             <NumericField label="Elevation" value={selectedFurniture.elevation} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { elevation: value }))} />
-            <NumericField label="Position X" value={selectedFurniture.position.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, x: value } }))} />
-            <NumericField label="Position Y" value={selectedFurniture.position.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { position: { ...selectedFurniture.position, y: value } }))} />
-            <NumericField label="Width" value={selectedFurniture.width} unit={lengthUnit} min={0.01 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { width: value }))} />
-            <NumericField label="Depth" value={selectedFurniture.depth} unit={lengthUnit} min={0.01 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { depth: value }))} />
+            <NumericField label="Position X" value={selectedFurniture.position.x} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedFurniture({ position: { ...selectedFurniture.position, x: value } })} />
+            <NumericField label="Position Y" value={selectedFurniture.position.y} unit={lengthUnit} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedFurniture({ position: { ...selectedFurniture.position, y: value } })} />
+            <NumericField label="Width" value={selectedFurniture.width} unit={lengthUnit} min={0.01 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedFurniture({ width: value })} />
+            <NumericField label="Depth" value={selectedFurniture.depth} unit={lengthUnit} min={0.01 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedFurniture({ depth: value })} />
             <NumericField label="Height" value={selectedFurniture.height} unit={lengthUnit} min={0.01 * metresToProjectUnits} step={0.05 * metresToProjectUnits} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { height: value }))} />
             <NumericField label="Rotation X" value={selectedFurniture.rotationX} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotationX: value }))} />
-            <NumericField label="Rotation Y" value={selectedFurniture.rotation} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotation: value }))} />
+            <NumericField label="Rotation Y" value={selectedFurniture.rotation} unit="°" step={1} onCommit={(value) => editSelectedFurniture({ rotation: value })} />
             <NumericField label="Rotation Z" value={selectedFurniture.rotationZ} unit="°" step={1} onCommit={(value) => commit(updateFurniture(project, selectedFurniture.id, { rotationZ: value }))} />
             <button className="rotate-btn" onClick={rotateSelected}><RotateCw size={15} /> Rotate 45°</button>
             <button className="rotate-btn" onClick={duplicateSelectedFurniture}><Copy size={14} /> Duplicate object</button>
