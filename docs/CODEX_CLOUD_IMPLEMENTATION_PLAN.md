@@ -145,3 +145,6 @@ Do not implement or deploy placeholders as a complete product. Do not claim REA 
 ## 2026-11-05 OBJ-010 local follow-up
 
 Furniture duplication now searches a deterministic distance-ordered set of adjacent candidates and accepts only positions passing the shared room/floor/hole/wall/object validator. Linear arrays validate staged copies sequentially and reject the entire operation on any invalid copy. Five focused model tests cover legal and rejected duplicates, distance ordering, valid arrays, collisions and late out-of-room rejection without partial mutation. Final local evidence: 140 tests across 13 files, strict TypeScript/Vite build, and an isolated Chromium 2D/3D smoke covering snapping, rollback, duplicate, a valid first plus invalid second array copy, Undo/Redo, Save/reload and no page errors. These are generic local rules; no matched Homestyler/PingFusi comparison was made, full-parity verification remains 0%, and original catalog assets remain deferred. The source increment is being pushed through GitHub only; the public production alias is not checked.
+
+
+GitHub-only publish record: implementation commit `99b42f9` was pushed to `main` on `hiruuu30/homestyler_clone`. No Vercel sign-in, deployment inspection, or production claim was made; public deployment status remains unknown for this increment.
