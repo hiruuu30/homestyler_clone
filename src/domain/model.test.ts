@@ -37,6 +37,7 @@ import {
   updateWallThickness,
 } from './model';
 import { wallSolidSegments } from './wall-openings';
+import { assertFurniturePlacement } from './furniture-placement';
 
 const furniture = {
   id: 'chair-1',
@@ -706,31 +707,72 @@ describe('domain model', () => {
     expect(migrated.furniture[0]).toMatchObject({ elevation: 0, rotationX: 0, rotationZ: 0, hidden: false });
   });
 
-  it('duplicates furniture with a fresh ID and a small placement offset', () => {
-    const project = addFurniture(createStarterProject(), furniture);
-    const duplicated = duplicateFurniture(project, 'chair-1');
+  it('duplicates furniture into the nearest valid position without colliding with another object', () => {
+    const base = createStarterProject();
+    const room = createRectRoom('room-placement', 'Placement room', 8, 5, { x: 10, y: 0 }, undefined, 'floor-ground');
+    const empty = { ...base, rooms: [room], walls: [] };
+    const project = addFurniture(empty, { ...furniture, position: { x: 12, y: 2.5 }, width: 0.6, depth: 0.6, roomId: room.id });
+    const blockedRight = addFurniture(project, { ...furniture, id: 'chair-blocker', position: { x: 12.7, y: 2.5 }, width: 0.4, depth: 0.4, roomId: room.id });
+    const duplicated = duplicateFurniture(blockedRight, 'chair-1');
+    const copy = duplicated.furniture.find((item) => item.id !== 'chair-1' && item.id !== 'chair-blocker')!;
 
-    expect(duplicated.furniture).toHaveLength(2);
-    expect(duplicated.furniture[1]).toMatchObject({
-      assetId: 'asset-chair', name: 'Generic Chair', id: expect.not.stringMatching('chair-1'),
-      position: { x: 1.35, y: 1.35 }, roomId: 'room-starter',
-    });
-    expect(project.furniture).toHaveLength(1);
+    expect(copy).toMatchObject({ assetId: 'asset-chair', name: 'Generic Chair', roomId: room.id });
+    expect(Math.hypot(copy.position.x - 12, copy.position.y - 2.5)).toBeCloseTo(0.7, 8);
+    expect(copy.position).not.toEqual({ x: 12.7, y: 2.5 });
+    expect(() => assertFurniturePlacement(duplicated, copy)).not.toThrow();
+    expect(blockedRight.furniture).toHaveLength(2);
   });
 
-  it('creates an evenly spaced furniture array in one immutable project update', () => {
-    const project = addFurniture(createStarterProject(), furniture);
+  it('rejects a duplicate when no collision-free position fits and leaves the source unchanged', () => {
+    const base = createStarterProject();
+    const room = createRectRoom('room-placement', 'Small placement room', 0.8, 0.8, { x: 10, y: 0 }, undefined, 'floor-ground');
+    const empty = { ...base, rooms: [room], walls: [] };
+    const project = addFurniture(empty, { ...furniture, position: { x: 10.4, y: 0.4 }, width: 0.6, depth: 0.6, roomId: room.id });
+
+    expect(() => duplicateFurniture(project, 'chair-1')).toThrow(/no valid room placement/);
+    expect(project.furniture).toHaveLength(1);
+    expect(project.furniture[0].position).toEqual({ x: 10.4, y: 0.4 });
+  });
+
+  it('tests nearer duplicate clearances before farther ones for a wide furniture footprint', () => {
+    const base = createStarterProject();
+    const room = createRectRoom('room-placement', 'Placement room', 8, 5, { x: 10, y: 0 }, undefined, 'floor-ground');
+    const empty = { ...base, rooms: [room], walls: [] };
+    const project = addFurniture(empty, { ...furniture, position: { x: 14, y: 2.5 }, width: 2, depth: 0.2, roomId: room.id });
+    const duplicated = duplicateFurniture(project, 'chair-1');
+
+    expect(duplicated.furniture[1].position).toMatchObject({ x: 14, y: expect.closeTo(2.8, 8) });
+  });
+
+  it('creates an evenly spaced, validated furniture array in one immutable project update', () => {
+    const base = createStarterProject();
+    const room = createRectRoom('room-placement', 'Placement room', 8, 5, { x: 10, y: 0 }, undefined, 'floor-ground');
+    const empty = { ...base, rooms: [room], walls: [] };
+    const project = addFurniture(empty, { ...furniture, position: { x: 12, y: 2.5 }, width: 0.6, depth: 0.6, roomId: room.id });
     const result = arrayFurniture(project, 'chair-1', 3, { x: 0.8, y: -0.25 });
 
     expect(result.furniture).toHaveLength(4);
     expect(result.furniture.slice(1).map((item) => item.position)).toEqual([
-      { x: 1.8, y: 0.75 },
-      { x: 2.6, y: 0.5 },
-      { x: 3.4000000000000004, y: 0.25 },
+      { x: 12.8, y: 2.25 },
+      { x: 13.6, y: 2 },
+      { x: 14.4, y: 1.75 },
     ]);
     expect(result.furniture.slice(1).map((item) => item.id)).toEqual(['furniture-1', 'furniture-2', 'furniture-3']);
-    expect(result.furniture[3]).toMatchObject({ width: 0.6, depth: 0.6, height: 0.9, roomId: 'room-starter' });
+    expect(result.furniture[3]).toMatchObject({ width: 0.6, depth: 0.6, height: 0.9, roomId: room.id });
+    result.furniture.slice(1).forEach((item) => expect(() => assertFurniturePlacement(result, item)).not.toThrow());
     expect(project.furniture).toHaveLength(1);
+  });
+
+  it('rejects colliding or out-of-room arrays atomically, including a failure after valid copies', () => {
+    const base = createStarterProject();
+    const room = createRectRoom('room-placement', 'Placement room', 3, 2, { x: 10, y: 0 }, undefined, 'floor-ground');
+    const empty = { ...base, rooms: [room], walls: [] };
+    const project = addFurniture(empty, { ...furniture, position: { x: 10.8, y: 1 }, width: 0.4, depth: 0.4, roomId: room.id });
+
+    expect(() => arrayFurniture(project, 'chair-1', 2, { x: 0.2, y: 0 })).toThrow(/overlap another visible object/);
+    expect(() => arrayFurniture(project, 'chair-1', 3, { x: 0.9, y: 0 })).toThrow(/fully inside its assigned room/);
+    expect(project.furniture).toHaveLength(1);
+    expect(project.furniture[0].position).toEqual({ x: 10.8, y: 1 });
   });
 
   it('rejects invalid furniture array counts, offsets, and IDs', () => {

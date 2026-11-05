@@ -294,9 +294,14 @@ export default function App() {
   }
   function duplicateSelectedFurniture() {
     if (!selectedFurniture) return;
-    const next = duplicateFurniture(project, selectedFurniture.id);
-    commit(next);
-    setSelectedId(next.furniture.at(-1)?.id ?? null);
+    try {
+      const next = duplicateFurniture(project, selectedFurniture.id);
+      commit(next);
+      setSelectedId(next.furniture.at(-1)?.id ?? null);
+      notify('Object duplicated in a nearby valid position · Undo to restore');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not find a valid position for the duplicate');
+    }
   }
   function createSelectedFurnitureArray() {
     if (!selectedFurniture) return;

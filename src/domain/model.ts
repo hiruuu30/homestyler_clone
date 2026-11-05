@@ -15,7 +15,7 @@ import type {
   WallOpeningKind,
 } from './types';
 import { ceilingFinishForRoom, floorFinishForRoom, normalizeFloorFinishMapping } from './floor-finish';
-import { assertFurniturePlacement } from './furniture-placement';
+import { assertFurniturePlacement, furnitureFootprint } from './furniture-placement';
 
 const DEFAULT_WALL_THICKNESS = 0.12;
 const DEFAULT_WALL_HEIGHT = 2.4;
@@ -1161,6 +1161,24 @@ export function updateFurniture(project: DesignProject, furnitureId: string, cha
   return next;
 }
 
+function furnitureDuplicateOffsets(source: FurnitureInstance, gap: number): readonly Point[] {
+  const footprint = furnitureFootprint(source);
+  const width = Math.max(...footprint.map((corner) => corner.x)) - Math.min(...footprint.map((corner) => corner.x));
+  const depth = Math.max(...footprint.map((corner) => corner.y)) - Math.min(...footprint.map((corner) => corner.y));
+  const horizontal = width + gap;
+  const vertical = depth + gap;
+  const directions = [
+    { x: horizontal, y: 0 }, { x: -horizontal, y: 0 },
+    { x: 0, y: vertical }, { x: 0, y: -vertical },
+    { x: horizontal, y: vertical }, { x: -horizontal, y: vertical },
+    { x: horizontal, y: -vertical }, { x: -horizontal, y: -vertical },
+  ];
+  return [1, 1.5, 2, 3].flatMap((multiplier) => directions.map((offset) => ({
+    x: offset.x * multiplier,
+    y: offset.y * multiplier,
+  }))).sort((left, right) => Math.hypot(left.x, left.y) - Math.hypot(right.x, right.y));
+}
+
 export function duplicateFurniture(project: DesignProject, furnitureId: string): DesignProject {
   id(furnitureId, 'furniture id');
   const source = project.furniture.find((item) => item.id === furnitureId);
@@ -1169,15 +1187,23 @@ export function duplicateFurniture(project: DesignProject, furnitureId: string):
   let suffix = project.furniture.length + 1;
   let duplicateId = `furniture-${suffix}`;
   while (ids.has(duplicateId)) duplicateId = `furniture-${++suffix}`;
-  const duplicate: FurnitureInstance = freeze({
-    ...source,
-    id: duplicateId,
-    position: point({
-      x: source.position.x + 0.35 * unitScale('m', project.units),
-      y: source.position.y + 0.35 * unitScale('m', project.units),
-    }, 'duplicate position'),
-  });
-  return copyProject(project, { furniture: [...project.furniture, duplicate] });
+  const gap = 0.1 * unitScale('m', project.units);
+  for (const offset of furnitureDuplicateOffsets(source, gap)) {
+    const duplicate: FurnitureInstance = freeze({
+      ...source,
+      id: duplicateId,
+      position: point({ x: source.position.x + offset.x, y: source.position.y + offset.y }, 'duplicate position'),
+    });
+    let valid = true;
+    try {
+      assertFurniturePlacement({ ...project, furniture: [...project.furniture, duplicate] }, duplicate);
+    } catch {
+      // Candidate validation is side-effect free; keep searching without mutating the source project.
+      valid = false;
+    }
+    if (valid) return copyProject(project, { furniture: [...project.furniture, duplicate] });
+  }
+  throw new RangeError('no valid room placement is available for this duplicate');
 }
 
 export function arrayFurniture(project: DesignProject, furnitureId: string, copies: number, offset: Point): DesignProject {
@@ -1189,18 +1215,21 @@ export function arrayFurniture(project: DesignProject, furnitureId: string, copi
   if (!source) throw new RangeError(`unknown furniture: ${furnitureId}`);
   const usedIds = new Set(project.furniture.map((item) => item.id));
   let suffix = 1;
-  const created = Array.from({ length: copies }, (_, index) => {
+  const created: FurnitureInstance[] = [];
+  for (let index = 0; index < copies; index += 1) {
     let nextId = `furniture-${suffix}`;
     while (usedIds.has(nextId)) nextId = `furniture-${++suffix}`;
     usedIds.add(nextId);
     suffix += 1;
-    return freeze({
+    const item: FurnitureInstance = freeze({
       ...source,
       id: nextId,
       name: `${source.name} ${index + 2}`,
       position: point({ x: source.position.x + delta.x * (index + 1), y: source.position.y + delta.y * (index + 1) }, 'array position'),
     });
-  });
+    assertFurniturePlacement({ ...project, furniture: [...project.furniture, ...created, item] }, item);
+    created.push(item);
+  }
   return copyProject(project, { furniture: [...project.furniture, ...created] });
 }
 

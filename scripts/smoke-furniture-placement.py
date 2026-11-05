@@ -129,6 +129,42 @@ async def run(url, executable):
         assert abs(three_d_moved['furniture'][0]['position']['x'] - 5.2) < 1e-6, three_d_moved['furniture'][0]
         checks.append('3D: shared room validator and snapping; invalid drop rolls back; valid floor-plane move persists')
 
+        await page.locator('.bottom-bar .view-tab').filter(has_text='2D Plan').click()
+        await page.get_by_label('Width', exact=True).fill('0.6')
+        await page.get_by_label('Width', exact=True).press('Enter')
+        await page.get_by_label('Depth', exact=True).fill('0.4')
+        await page.get_by_label('Depth', exact=True).press('Enter')
+        await page.get_by_role('button', name='Duplicate object', exact=True).click()
+        await expect(page.locator('.toast')).to_contain_text('duplicated in a nearby valid position')
+        duplicated = await read_saved_project(page)
+        assert len(duplicated['furniture']) == 2, duplicated['furniture']
+        duplicate = next(item for item in duplicated['furniture'] if item['id'] != duplicated['furniture'][0]['id'])
+        assert abs(duplicate['position']['x'] - 5.2) < 1e-6 and abs(duplicate['position']['y'] - 1.3) < 1e-6, duplicate
+
+        await page.get_by_role('button', name='Linear array', exact=True).click()
+        await page.get_by_label('Copies', exact=True).fill('2')
+        await page.get_by_label('Copies', exact=True).press('Enter')
+        await page.get_by_label('Spacing X', exact=True).fill('0.61')
+        await page.get_by_label('Spacing X', exact=True).press('Enter')
+        await page.get_by_label('Spacing Y', exact=True).fill('0')
+        await page.get_by_label('Spacing Y', exact=True).press('Enter')
+        await page.get_by_role('button', name='Create array', exact=True).click()
+        await expect(page.locator('.toast')).to_contain_text('fully inside its assigned room')
+        rejected_array = await read_saved_project(page)
+        assert len(rejected_array['furniture']) == 2, rejected_array['furniture']
+
+        await page.get_by_role('button', name='Undo', exact=True).click()
+        after_undo = await read_saved_project(page)
+        assert len(after_undo['furniture']) == 1, after_undo['furniture']
+        await page.get_by_role('button', name='Redo', exact=True).click()
+        after_redo = await read_saved_project(page)
+        assert len(after_redo['furniture']) == 2, after_redo['furniture']
+        await page.reload(wait_until='networkidle')
+        reloaded = await page.evaluate('''() => Object.values(localStorage).map(value => {try {return JSON.parse(value)} catch {return null}})
+          .find(value => value && Array.isArray(value.rooms) && Array.isArray(value.furniture))''')
+        assert len(reloaded['furniture']) == 2, reloaded['furniture']
+        checks.append('Duplicate: nearest legal placement; array with a valid first copy and invalid second copy is atomic; Undo/Redo and local reload preserve only committed objects')
+
         assert not errors, errors
         print(json.dumps({'passed': True, 'checks': checks, 'page_errors': errors}, indent=2))
         await browser.close()

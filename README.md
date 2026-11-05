@@ -1,6 +1,6 @@
 # Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds conservative room-constrained furniture movement with collision rejection and local snapping, alongside linked floor voids, the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); its status is not rechecked for this GitHub-only increment. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone extends conservative room-constrained furniture placement to safe duplication and atomic arrays, alongside linked floor voids, the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); its status is not rechecked for this GitHub-only increment. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
 
 ## Current milestone: command bar and active-floor clearing
 
@@ -24,7 +24,9 @@ Select a room, choose an upper floor, and trace a polygon to create a linked flo
 
 Dragging a furniture object in 2D or 3D snaps its center to a local 10 cm grid when the cursor lands within tolerance. New moves and numeric position, width, depth, or plan-rotation edits must keep the rotated footprint fully inside its assigned room on its existing floor, outside room holes, away from wall thickness, and clear of other visible furniture. Hidden furniture does not block placement. Invalid drag previews turn red; dropping there leaves the project and undo history unchanged. Valid moves remain one shared Undo/Redo edit.
 
-These are conservative rules for this independent editor, not recovered Homestyler semantics. The editor does not automatically reassign rooms, repair legacy placements, or apply these checks to the separate duplicate/array creation paths. Existing stored placements remain untouched until edited; exact visual and behavioral parity is unverified.
+Duplicate tests a deterministic set of adjacent positions in increasing center-to-center distance and uses the first one that passes the same room, floor, hole, wall-clearance, and visible-object checks. If none of the tested positions fits, it makes no change. A linear array validates each successive copy against the original project and previously staged copies; if any copy is invalid, the whole array is rejected. A successful duplicate or array is one Undo/Redo step and is saved through the same local project store.
+
+These are conservative rules for this independent editor, not recovered Homestyler semantics. The editor does not automatically reassign rooms or repair legacy placements; existing stored placements remain untouched until edited. Exact visual and behavioral parity is unverified.
 
 ## Other implemented capabilities
 
@@ -34,7 +36,7 @@ The editor also supports rectangular and concave polygon rooms, snapping, wall t
 
 - **Verified full-parity completion: 0%.** No complete feature/state suite has passed exact functional and pixel-level comparison. This is not an estimate of how much independent code has been written.
 - **Original catalog asset coverage: 0%.** No original Homestyler models, materials or textures are present.
-- **Local checks:** 137 tests pass across 13 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. A dedicated isolated Chromium smoke verifies 2D/3D furniture placement: 10 cm snapping, invalid room-boundary drops rejected/rolled back, valid moves, 2D Undo/Redo, and Save with no page errors. The broader editor/structural-opening smoke results remain documented in the feature ledger; no Homestyler comparison was performed for these local rules.
+- **Local checks:** 140 tests pass across 13 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. An isolated Chromium smoke verifies 2D/3D furniture placement, 10 cm snapping, invalid-drop rollback, a legal duplicate position, atomic rejection after the first array copy fits but the next does not, Undo/Redo, Save/reload, and zero page errors. No Homestyler comparison was performed for these local placement rules.
 - **Earlier retained browser evidence:** independent floor/ceiling pattern persistence and opening drag/history/reload passed local Chromium checks. Ceiling/wall/furniture color checks previously measured 40,169/19,926/6,317 changed 3D pixels when undoing those color assignments.
 - **Publishing:** approved increments are pushed to GitHub main. Consult the latest deployment ledger record for the exact public bundle verification; a source push alone is not proof that the public alias has updated.
 - **PingFusi:** authenticated CLI preflight passes. The captured numeric command-bar/File-menu measurements are bounded evidence, not an independent review verdict or whole-editor pixel acceptance. The existing hosted review draft has no confirmed round receipt or verdict; no duplicate was filed. No matched reference state was available for the new structural-opening workflow.
