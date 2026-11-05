@@ -1,6 +1,6 @@
 # Independent Homestyler clone prototype
 
-**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds a transient, snap-aware 2D ruler to the existing room-constrained furniture placement, duplication and atomic-array work, alongside linked floor voids, the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); its status is not rechecked for this GitHub-only increment. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
+**Status:** ongoing, independently authored prototype on `hiruuu30/homestyler_clone` main. The current milestone adds explicit-save 3D camera persistence and a transient, snap-aware 2D ruler to the existing room-constrained furniture placement, duplication and atomic-array work, alongside linked floor voids, the measured command bar, active-floor bulk clearing, independent ceiling-pattern mapping and along-wall opening dragging. The public alias is [homestyler-clone.vercel.app](https://homestyler-clone.vercel.app/); its status is not rechecked for this GitHub-only increment. This is not a complete clone or a full-parity claim. Original catalog assets remain deferred.
 
 ## Current milestone: command bar and active-floor clearing
 
@@ -32,6 +32,10 @@ These are conservative rules for this independent editor, not recovered Homestyl
 
 Choose **Tools → Ruler**, then click two plan points. Each point snaps using the editor's existing wall/room endpoint-first and edge-projection policy; the live line and distance label use the active project unit. A third click starts a new measurement, and Escape clears it. The overlay is temporary: it does not change project geometry, selection, Undo/Redo, local saves, or exports. This is a generic local tool; Homestyler's exact ruler gestures, formatting, persistence, and visual treatment have not been compared.
 
+## Saved 3D camera views
+
+Orbit with a drag, pan with Shift-drag, and zoom with the wheel. The camera target, distance, azimuth, and elevation remain navigational state: gestures create no geometry change or Undo entry, but mark the project unsaved. **Save** and **Save As** persist the camera locally; switching between 2D/3D or reopening a saved project restores it. Fit View clears the custom camera, and older project JSON without camera metadata continues to use the fitted default. Metre/foot conversion scales the saved target and zoom. This has not been matched against Homestyler's camera persistence semantics and does not sync to a cloud account.
+
 ## Other implemented capabilities
 
 The editor also supports rectangular and concave polygon rooms, snapping, wall topology repair and collinear joins, editable wall properties, multiple floors, single-floor and linked structural floor openings, translucent 3D ceilings, procedural floor mapping, constrained furniture transforms and arrays, hidden-object recovery, plan underlays, unit conversion, and SVG/CSV/JSON exports. These generic implementations do not establish equivalent Homestyler behavior.
@@ -40,7 +44,7 @@ The editor also supports rectangular and concave polygon rooms, snapping, wall t
 
 - **Verified full-parity completion: 0%.** No complete feature/state suite has passed exact functional and pixel-level comparison. This is not an estimate of how much independent code has been written.
 - **Original catalog asset coverage: 0%.** No original Homestyler models, materials or textures are present.
-- **Local checks:** 143 tests pass across 14 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. Isolated Chromium smokes verify the 2D ruler's snapped 2.00 m wall measurement, Escape clearing, unchanged saved project and history, plus 2D/3D furniture placement, snapping, invalid-drop rollback, legal duplication, atomic array rejection, Undo/Redo, Save/reload, and zero page errors. No Homestyler comparison was performed for these local rules.
+- **Local checks:** 146 tests pass across 14 test files; the strict TypeScript/Vite build succeeds, with the existing large lazy-3D-chunk warning. Isolated Chromium smokes verify the ruler; saved-camera orbit, Shift-pan and zoom; local Save/Save As; Fit reset; and identical 3D canvas pixels after switching views and reopening at the same viewport. Existing editor, furniture/array, and linked-opening smokes also pass with zero page errors. No Homestyler comparison was performed for these local behaviors.
 - **Earlier retained browser evidence:** independent floor/ceiling pattern persistence and opening drag/history/reload passed local Chromium checks. Ceiling/wall/furniture color checks previously measured 40,169/19,926/6,317 changed 3D pixels when undoing those color assignments.
 - **Publishing:** approved increments are pushed to GitHub main. Consult the latest deployment ledger record for the exact public bundle verification; a source push alone is not proof that the public alias has updated.
 - **PingFusi:** authenticated CLI preflight passes. The captured numeric command-bar/File-menu measurements are bounded evidence, not an independent review verdict or whole-editor pixel acceptance. The existing hosted review draft has no confirmed round receipt or verdict; no duplicate was filed. No matched reference state was available for the new structural-opening workflow.
@@ -49,7 +53,7 @@ Significant scope remains incomplete: broader topology, original catalog/materia
 
 ## Local verification
 
-Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-ruler.py`, `python3 scripts/smoke-furniture-placement.py`, `python3 scripts/smoke-editor-commands.py`, or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. Pass `--url` or `--executable` to override their defaults.
+Run `npm test` and `npm run build`. For reusable UI checks, start the app on port 4173 and run `python3 scripts/smoke-camera-persistence.py`, `python3 scripts/smoke-ruler.py`, `python3 scripts/smoke-furniture-placement.py`, `python3 scripts/smoke-editor-commands.py`, or `python3 scripts/smoke-structural-openings.py`; these require Python Playwright and Chromium and use an isolated disposable browser profile. The camera smoke also requires Pillow. Pass `--url` or `--executable` to override their defaults.
 
 ## Project files
 

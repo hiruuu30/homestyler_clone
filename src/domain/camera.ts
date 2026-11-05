@@ -1,4 +1,4 @@
-import type { DesignProject, Point } from './types';
+import type { DesignProject, Point, SavedCamera, Units } from './types';
 
 export type ProjectCameraFrame = {
   targetX: number;
@@ -51,4 +51,43 @@ export function frameProjectCamera(project: DesignProject, aspect: number, field
     targetZ: -(minY + maxY) / 2,
     radius: Math.max(5, (halfDiagonal / Math.sin(limitingHalfAngle)) * 1.1),
   };
+}
+
+
+/** Normalize an imported or persisted view, rejecting malformed coordinates and bounding unsafe values. */
+export function normalizeSavedCamera(value: unknown, units: Units = 'm'): SavedCamera | null {
+  if (!value || typeof value !== 'object' || (units !== 'm' && units !== 'ft')) return null;
+  const raw = value as Partial<SavedCamera>;
+  const values = [raw.targetX, raw.targetY, raw.targetZ, raw.radius, raw.azimuth, raw.elevation];
+  if (!values.every((item) => typeof item === 'number' && Number.isFinite(item))) return null;
+  const unitsPerMetre = units === 'ft' ? 1 / 0.3048 : 1;
+  const targetLimit = 1_000_000 * unitsPerMetre;
+  const radiusLimit = 1_000 * unitsPerMetre;
+  const azimuth = Number(raw.azimuth);
+  return Object.freeze({
+    targetX: Math.max(-targetLimit, Math.min(targetLimit, Number(raw.targetX))),
+    targetY: Math.max(-targetLimit, Math.min(targetLimit, Number(raw.targetY))),
+    targetZ: Math.max(-targetLimit, Math.min(targetLimit, Number(raw.targetZ))),
+    radius: Math.max(5 * unitsPerMetre, Math.min(radiusLimit, Number(raw.radius))),
+    azimuth: Math.atan2(Math.sin(azimuth), Math.cos(azimuth)),
+    elevation: Math.max(0.18, Math.min(1.45, Number(raw.elevation))),
+  });
+}
+
+/** Convert saved camera coordinates and orbit distance with the project unit system. */
+export function convertSavedCameraUnits(
+  camera: SavedCamera | null | undefined,
+  from: Units,
+  to: Units,
+): SavedCamera | null {
+  if (!camera || (from !== 'm' && from !== 'ft') || (to !== 'm' && to !== 'ft')) return null;
+  if (from === to) return normalizeSavedCamera(camera, to);
+  const factor = (from === 'ft' ? 0.3048 : 1) / (to === 'ft' ? 0.3048 : 1);
+  return normalizeSavedCamera({
+    ...camera,
+    targetX: camera.targetX * factor,
+    targetY: camera.targetY * factor,
+    targetZ: camera.targetZ * factor,
+    radius: camera.radius * factor,
+  }, to);
 }

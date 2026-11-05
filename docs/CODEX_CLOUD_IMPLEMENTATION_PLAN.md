@@ -156,3 +156,8 @@ The previously disabled Tools → Ruler command now enters a transient 2D measur
 
 
 GitHub-only release record: ruler implementation commit `1f8b4b2b1d247ebaf63ff899fbba99b5b207395f` was pushed to `main` on `hiruuu30/homestyler_clone`; a read-only `ls-remote` check confirmed the remote main hash matched exactly. No Vercel sign-in, public alias request, or production verification was performed. Public deployment status remains unknown for this increment.
+
+
+## 2026-11-05 CAM-008 local follow-up
+
+3D orbit, Shift-drag pan, and wheel zoom now snapshot the active camera target, radius, azimuth, and elevation as navigational project metadata. Camera gestures mark the project unsaved but are excluded from geometry Undo/Redo and object selection; explicit local Save and Save As include the camera. Re-entering 3D or reopening local JSON restores the saved view, and Fit View removes the custom state on the next Save. Older projects without a camera remain valid and use the standard fitted frame. Target and radius scale with metre/foot conversion, and imported camera values are finite-checked, clamped, and normalized. Three added camera-domain tests cover migration, validation, and unit round-trips. Full local evidence: 146 tests across 14 files, strict TypeScript/Vite build, all five isolated Chromium suites, and dedicated view-image checks with 0 changed canvas pixels after 2D↔3D remount and local Save/reload at an unchanged 1280×649 viewport. This confirms only the independent renderer's own save/restore behavior; Homestyler's camera persistence and visual semantics remain unverified. No account/cloud synchronization is implemented, full-parity verification remains 0%, and original catalog assets remain deferred.

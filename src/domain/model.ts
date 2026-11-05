@@ -16,6 +16,7 @@ import type {
 } from './types';
 import { ceilingFinishForRoom, floorFinishForRoom, normalizeFloorFinishMapping } from './floor-finish';
 import { assertFurniturePlacement, furnitureFootprint } from './furniture-placement';
+import { convertSavedCameraUnits, normalizeSavedCamera } from './camera';
 
 const DEFAULT_WALL_THICKNESS = 0.12;
 const DEFAULT_WALL_HEIGHT = 2.4;
@@ -271,6 +272,7 @@ export function convertProjectUnits(project: DesignProject, units: Units): Desig
   const scalePoint = (value: Point): Point => point({ x: scaleLength(value.x, factor), y: scaleLength(value.y, factor) }, 'scaled point');
   return copyProject(project, {
     units,
+    camera: convertSavedCameraUnits(project.camera, project.units, units) ?? undefined,
     levels: project.levels.map((level) => freeze({
       ...level,
       elevation: scaleLength(level.elevation, factor),
@@ -1593,6 +1595,7 @@ export function normalizeProject(value: unknown): DesignProject {
     id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : 'imported-project',
     name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : 'Imported Project',
     units: units as Units,
+    camera: normalizeSavedCamera(candidate.camera, units) ?? undefined,
     levels: freeze(levels),
     activeLevelId,
     rooms: freeze(rooms),

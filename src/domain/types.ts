@@ -107,6 +107,15 @@ export type Material = Readonly<{
   textureUrl?: string;
 }>;
 
+export type SavedCamera = Readonly<{
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  radius: number;
+  azimuth: number;
+  elevation: number;
+}>;
+
 export type DesignProject = Readonly<{
   id: string;
   name: string;
@@ -120,6 +129,7 @@ export type DesignProject = Readonly<{
   furniture: readonly FurnitureInstance[];
   underlays: readonly PlanUnderlay[];
   materials: readonly Material[];
+  camera?: SavedCamera;
   updatedAt: string;
 }>;
 

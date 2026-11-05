@@ -10,7 +10,7 @@ import {
   removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeStructuralOpening, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomCeilingFinishMapping, updateRoomFloorFinishMapping,
   findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
-import type { DesignProject, FloorFinishMapping, Point, ToolMode } from './domain/types';
+import type { DesignProject, FloorFinishMapping, Point, SavedCamera, ToolMode } from './domain/types';
 import { ceilingFinishForRoom, floorFinishForRoom } from './domain/floor-finish';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './export/deliverables';
 import { reconstructRoomsFromWalls } from './domain/room-reconstruction';
@@ -18,6 +18,7 @@ import { PlanCanvas } from './components/PlanCanvas';
 import { EditorCommandBar, type MenuItem, type MenuTriggerId } from './components/EditorCommandBar';
 import { clearLevelContents } from './domain/clear-level';
 import { snapFurniturePosition } from './domain/snapping';
+import { convertSavedCameraUnits, normalizeSavedCamera } from './domain/camera';
 const SceneViewport = lazy(() => import('./components/SceneViewport'));
 
 type ViewMode = 'plan' | '3d';
@@ -56,6 +57,8 @@ export default function App() {
   const [redoStack, setRedoStack] = useState<DesignProject[]>([]);
   const [view, setView] = useState<ViewMode>('plan');
   const [cameraFitRequest, setCameraFitRequest] = useState(0);
+  const [cameraState, setCameraState] = useState<SavedCamera | null>(() => project.camera ?? null);
+  const cameraStateRef = useRef(cameraState);
   const [panel, setPanel] = useState<PanelMode>('build');
   const [finishTarget, setFinishTarget] = useState<'floor' | 'ceiling'>('floor');
   const [tool, setTool] = useState<ToolMode>('select');
@@ -113,7 +116,12 @@ export default function App() {
   function undo() {
     const previous = undoStack.at(-1);
     if (!previous) return;
-    if (previous.units !== project.units) setCameraFitRequest((value) => value + 1);
+    if (previous.units !== project.units) {
+      const nextCamera = convertSavedCameraUnits(cameraStateRef.current, project.units, previous.units);
+      cameraStateRef.current = nextCamera;
+      setCameraState(nextCamera);
+      setCameraFitRequest((value) => value + 1);
+    }
     setRedoStack((items) => [...items, project]);
     setUndoStack((items) => items.slice(0, -1));
     setProject(previous);
@@ -129,15 +137,34 @@ export default function App() {
   function redo() {
     const next = redoStack.at(-1);
     if (!next) return;
-    if (next.units !== project.units) setCameraFitRequest((value) => value + 1);
+    if (next.units !== project.units) {
+      const nextCamera = convertSavedCameraUnits(cameraStateRef.current, project.units, next.units);
+      cameraStateRef.current = nextCamera;
+      setCameraState(nextCamera);
+      setCameraFitRequest((value) => value + 1);
+    }
     setUndoStack((items) => [...items, project]);
     setRedoStack((items) => items.slice(0, -1));
     setProject(next);
     setActiveLevelId(next.activeLevelId);
     setSaved(false);
   }
+  function updateCameraState(camera: SavedCamera) {
+    const nextCamera = normalizeSavedCamera(camera, project.units);
+    if (!nextCamera) return;
+    cameraStateRef.current = nextCamera;
+    setCameraState(nextCamera);
+    setSaved(false);
+  }
+  function fitCameraView() {
+    const hadSavedCamera = cameraStateRef.current !== null;
+    cameraStateRef.current = null;
+    setCameraState(null);
+    setCameraFitRequest((value) => value + 1);
+    if (hadSavedCamera) setSaved(false);
+  }
   function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...project, activeLevelId }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...project, activeLevelId, camera: cameraStateRef.current ?? undefined }));
     setSaved(true);
     notify('Saved on this device');
   }
@@ -428,7 +455,7 @@ export default function App() {
       : editSelectedRoomFloorFinish(changes);
   }
   function exportProject() {
-    const blob = new Blob([JSON.stringify({ ...project, activeLevelId }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ ...project, activeLevelId, camera: cameraStateRef.current ?? undefined }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -501,7 +528,7 @@ export default function App() {
         opacity: 0.45,
       });
       commit(next);
-      setCameraFitRequest((value) => value + 1);
+      fitCameraView();
       setView('plan');
       notify('Plan image added · adjust size and position below');
     } catch (error) {
@@ -549,6 +576,9 @@ export default function App() {
   }
   function changeUnits(units: 'm' | 'ft') {
     if (units === project.units) return;
+    const nextCamera = convertSavedCameraUnits(cameraStateRef.current, project.units, units);
+    cameraStateRef.current = nextCamera;
+    setCameraState(nextCamera);
     commit(convertProjectUnits(project, units));
     setCameraFitRequest((value) => value + 1);
     notify(`Project dimensions converted to ${units === 'm' ? 'metres' : 'feet'}`);
@@ -557,6 +587,8 @@ export default function App() {
     if (!file) return;
     try {
       const imported = normalizeProject(JSON.parse(await file.text()));
+      cameraStateRef.current = imported.camera ?? null;
+      setCameraState(imported.camera ?? null);
       commit(imported, imported.activeLevelId);
       setSelectedId(null);
       notify('Project imported');
@@ -566,6 +598,8 @@ export default function App() {
   function newDesign() {
     if (!window.confirm('Start a new design?')) return;
     const next = createStarterProject();
+    cameraStateRef.current = null;
+    setCameraState(null);
     commit(next, next.activeLevelId);
     setSelectedId(null);
   }
@@ -662,7 +696,7 @@ export default function App() {
       { id: 'show-some', label: 'Show Some Hidden Items', onSelect: () => openPanel('project') },
       { id: 'plan', label: '2D Plan', checked: view === 'plan', onSelect: () => { setView('plan'); setTool('select'); } },
       { id: 'three-d', label: '3D View', checked: view === '3d', onSelect: () => { setView('3d'); setTool('select'); } },
-      { id: 'fit', label: 'Fit View', onSelect: () => setCameraFitRequest((value) => value + 1) },
+      { id: 'fit', label: 'Fit View', onSelect: fitCameraView },
       { id: 'catalog', label: 'Show Catalog', checked: !collapsed, onSelect: () => setCollapsed((value) => !value) },
     ],
     export: [
@@ -807,8 +841,8 @@ export default function App() {
           <div className="viewport-area">
             {view === 'plan'
               ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateRoomHole={createRoomHole} onCreateStructuralOpening={createStructuralRoomHole} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} onMoveOpening={moveOpening} onResizeOpening={resizeOpening} fitRequest={cameraFitRequest} />
-              : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport key={cameraFitRequest} project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
-          <div className="canvas-hint">{tool === 'measure' ? 'Click two points to measure · snaps to walls and corners · Esc clears' : tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'structural-hole' ? `Trace a void through every floor up to ${structuralTargetLevel?.name ?? 'the selected upper floor'} · close on the first point or press Enter` : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · drag doors and windows along their walls · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
+              : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport key={cameraFitRequest} project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} cameraState={cameraState} onCameraChange={updateCameraState} /></Suspense>}
+          <div className="canvas-hint">{tool === 'measure' ? 'Click two points to measure · snaps to walls and corners · Esc clears' : tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'structural-hole' ? `Trace a void through every floor up to ${structuralTargetLevel?.name ?? 'the selected upper floor'} · close on the first point or press Enter` : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · drag doors and windows along their walls · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom · Save to keep this view'}</div>
           </div>
           <footer className="bottom-bar">
             <div className="canvas-tools"><button className={tool === 'select' ? 'chosen' : ''} title="Select" onClick={() => setTool('select')}><MousePointer2 size={16} /></button><button className={tool === 'room' ? 'chosen' : ''} title="Draw room" onClick={() => { setView('plan'); setTool('room'); }}><Square size={16} /></button><button className={tool === 'wall' ? 'chosen' : ''} title="Draw wall" onClick={() => { setView('plan'); setTool('wall'); }}><Grid2X2 size={16} /></button><button title="Add sofa" onClick={() => { setPanel('furniture'); addSofa(); }}><Sofa size={16} /></button></div>
@@ -816,7 +850,7 @@ export default function App() {
             <button className={`view-tab ${view === 'plan' ? 'selected' : ''}`} onClick={() => { setView('plan'); setTool('select'); }}>2D Plan</button>
             <button className={`view-tab ${view === '3d' ? 'selected' : ''}`} onClick={() => { setView('3d'); setTool('select'); }}>3D View</button>
             <button className="view-tab disabled" disabled title="Not implemented">Walkthrough</button>
-            <button className="icon-btn" title="Fit view" onClick={() => { setCameraFitRequest((value) => value + 1); notify('View fitted to current project'); }}><Maximize2 size={16} /></button>
+            <button className="icon-btn" title="Fit view" onClick={() => { fitCameraView(); notify('View fitted to current project'); }}><Maximize2 size={16} /></button>
           </footer>
         </main>
         <aside className={`inspector${selectedWall ? ' wall-state' : ''}`}>

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { frameProjectCamera } from '../domain/camera';
 import { wallSolidSegments } from '../domain/wall-openings';
-import type { DesignProject, FloorFinishMapping, Level, Material, Point, Room, Units } from '../domain/types';
+import type { DesignProject, FloorFinishMapping, Level, Material, Point, Room, SavedCamera, Units } from '../domain/types';
 import { ceilingFinishForRoom, floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
 import { canPlaceFurniture } from '../domain/furniture-placement';
 import { snapFurniturePosition } from '../domain/snapping';
@@ -12,6 +12,8 @@ export type SceneViewportProps = {
   selectedId?: string | null;
   onSelect: (id: string | null) => void;
   onMoveFurniture: (id: string, position: Point) => void;
+  cameraState: SavedCamera | null;
+  onCameraChange: (camera: SavedCamera) => void;
 };
 
 function materialColor(project: DesignProject, id: string, fallback: string): string {
@@ -144,7 +146,7 @@ function addBox(
   return mesh;
 }
 
-export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }: SceneViewportProps) {
+export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture, cameraState, onCameraChange }: SceneViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -165,10 +167,15 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
     const floorElevation = activeLevel?.elevation ?? 0;
     const ceilingElevation = ceilingElevationForLevel(activeLevel);
     const initialFrame = frameProjectCamera(project, host.clientWidth / Math.max(1, host.clientHeight), camera.fov);
-    const target = new THREE.Vector3(initialFrame.targetX, initialFrame.targetY, initialFrame.targetZ);
-    let radius = initialFrame.radius;
-    let azimuth = Math.PI / 4;
-    let elevation = 0.82;
+    const target = new THREE.Vector3(
+      cameraState?.targetX ?? initialFrame.targetX,
+      cameraState?.targetY ?? initialFrame.targetY,
+      cameraState?.targetZ ?? initialFrame.targetZ,
+    );
+    let radius = cameraState?.radius ?? initialFrame.radius;
+    let azimuth = cameraState?.azimuth ?? Math.PI / 4;
+    let elevation = cameraState?.elevation ?? 0.82;
+    let hasCustomCamera = Boolean(cameraState);
     const updateCamera = () => {
       camera.position.set(
         target.x + radius * Math.cos(elevation) * Math.sin(azimuth),
@@ -177,6 +184,9 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       );
       camera.lookAt(target);
     };
+    const snapshotCamera = (): SavedCamera => ({
+      targetX: target.x, targetY: target.y, targetZ: target.z, radius, azimuth, elevation,
+    });
     updateCamera();
 
     scene.add(new THREE.HemisphereLight('#ffffff', '#8b9298', 2.1));
@@ -356,6 +366,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
           }
         }
       } else if (event.buttons === 1) {
+        hasCustomCamera = true;
         if (event.shiftKey) {
           camera.updateMatrixWorld();
           const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
@@ -388,6 +399,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       const nextPosition = currentPosition;
       const shouldMoveObject = movedObject;
       const shouldSelectByClick = !moved;
+      const cameraChanged = moved && !dragFurnitureId;
       const mesh = dragMesh;
       const origin = originalPosition;
       const color = originalColor;
@@ -397,6 +409,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
         if (mesh.material instanceof THREE.MeshStandardMaterial && color) mesh.material.color.copy(color);
       }
       clearDrag();
+      if (cameraChanged) onCameraChange(snapshotCamera());
       if (furnitureId) {
         onSelect(furnitureId);
         if (shouldMoveObject && nextPosition) onMoveFurniture(furnitureId, nextPosition);
@@ -408,6 +421,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
     };
     const pointerCancel = (event: PointerEvent) => {
       if (!dragging) return;
+      const cameraChanged = moved && !dragFurnitureId;
       if (dragMesh && originalPosition) {
         dragMesh.position.x = originalPosition.x;
         dragMesh.position.z = -originalPosition.y;
@@ -415,11 +429,15 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       }
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       clearDrag();
+      if (cameraChanged) onCameraChange(snapshotCamera());
     };
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
-      radius = THREE.MathUtils.clamp(radius * (1 + event.deltaY * 0.001), 5, 60);
+      const unitsPerMetre = project.units === 'ft' ? 1 / 0.3048 : 1;
+      hasCustomCamera = true;
+      radius = THREE.MathUtils.clamp(radius * (1 + event.deltaY * 0.001), 5 * unitsPerMetre, 60 * unitsPerMetre);
       updateCamera();
+      onCameraChange(snapshotCamera());
     };
     canvas.addEventListener('pointerdown', pointerDown);
     canvas.addEventListener('pointermove', pointerMove);
@@ -433,7 +451,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      radius = frameProjectCamera(project, camera.aspect, camera.fov).radius;
+      if (!hasCustomCamera) radius = frameProjectCamera(project, camera.aspect, camera.fov).radius;
       updateCamera();
     };
     const observer = new ResizeObserver(resize);
