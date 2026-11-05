@@ -1,6 +1,6 @@
 import { DOMParser } from '@xmldom/xmldom';
 import { describe, expect, it } from 'vitest';
-import { addFurniture, addLevel, addWallOpening, assignRoomCeilingMaterial, assignWallMaterial, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateFurniture, updateRoomFloorFinishMapping } from '../domain/model';
+import { addFurniture, addLevel, addWallOpening, assignRoomCeilingMaterial, assignWallMaterial, createPolygonRoomWithHoles, createStarterProject, normalizeProject, updateFurniture, updateRoomCeilingFinishMapping, updateRoomFloorFinishMapping } from '../domain/model';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './deliverables';
 
 const chair = {
@@ -117,6 +117,24 @@ describe('independent project deliverables', () => {
       .find((path) => path.getAttribute('id') === 'room-starter');
 
     expect(room?.getAttribute('data-ceiling-material-id')).toBe('material-neutral-wall');
+    expect(room?.getAttribute('fill')).toBe('#d9c7aa');
+  });
+
+  it('exports ceiling pattern transforms independently from the floor pattern', () => {
+    const project = updateRoomCeilingFinishMapping(createStarterProject(), 'room-starter', {
+      pattern: 'tile', colorOverlay: true, rotation: 35, offsetX: 0.25, offsetY: -0.5, scaleX: 1.5, scaleY: 0.75,
+    });
+    const document = new DOMParser().parseFromString(exportPlanSvg(project), 'image/svg+xml');
+    const room = Array.from(document.getElementsByTagNameNS('http://www.w3.org/2000/svg', 'path'))
+      .find((path) => path.getAttribute('id') === 'room-starter');
+
+    expect(room?.getAttribute('data-ceiling-pattern')).toBe('tile');
+    expect(room?.getAttribute('data-ceiling-rotation-deg')).toBe('35');
+    expect(room?.getAttribute('data-ceiling-offset-x-m')).toBe('0.25');
+    expect(room?.getAttribute('data-ceiling-offset-y-m')).toBe('-0.5');
+    expect(room?.getAttribute('data-ceiling-scale-x')).toBe('1.5');
+    expect(room?.getAttribute('data-ceiling-scale-y')).toBe('0.75');
+    expect(room?.getAttribute('data-floor-pattern')).toBe('none');
     expect(room?.getAttribute('fill')).toBe('#d9c7aa');
   });
 

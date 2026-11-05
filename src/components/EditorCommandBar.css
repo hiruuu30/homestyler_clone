@@ -1,0 +1,162 @@
+.editor-command-bar {
+  --editor-command-height: 45px;
+  box-sizing: border-box;
+  display: flex;
+  position: relative;
+  width: 609.375px;
+  height: var(--editor-command-height);
+  padding: 1px 7px 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  align-items: flex-start;
+  border-radius: 0 0 10px 10px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #60646f;
+  font-family: "Frutiger Next LT W1G", Calibri, Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  z-index: 20;
+}
+
+.editor-command-bar::-webkit-scrollbar { display: none; }
+.editor-command-bar,
+.editor-command-bar * { box-sizing: border-box; }
+
+.editor-command-bar__slot {
+  position: relative;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 42px;
+}
+.editor-command-bar__slot--construction { flex-basis: 67.375px; width: 67.375px; }
+.editor-command-bar__slot--render { flex-basis: 54px; width: 54px; }
+
+.editor-command-bar__trigger {
+  display: flex;
+  position: relative;
+  width: 100%;
+  height: 42px;
+  margin: 0;
+  padding: 1px 2px 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 12px;
+  white-space: nowrap;
+}
+.editor-command-bar__trigger:hover:not(:disabled),
+.editor-command-bar__trigger:focus-visible:not(:disabled),
+.editor-command-bar__trigger[aria-expanded="true"] {
+  outline: none;
+  background: rgba(92, 102, 119, 0.11);
+  color: #3e4350;
+}
+.editor-command-bar__trigger:focus-visible { box-shadow: inset 0 0 0 1px rgba(71, 93, 130, .6); }
+.editor-command-bar__trigger:disabled { opacity: 1; color: #aeb1b8; cursor: not-allowed; }
+.editor-command-bar__icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  margin-top: 1.578125px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  color: #1c1c1c;
+}
+.editor-command-bar__trigger:disabled .editor-command-bar__icon { color: #b5b5b5; }
+.editor-command-bar__icon svg { width: 20px; height: 20px; stroke-width: 1.8; }
+.editor-command-bar__label {
+  display: block;
+  max-width: 100%;
+  margin-top: 5.38671875px;
+  overflow: hidden;
+  text-overflow: clip;
+  line-height: 12px;
+  transform: scale(.9);
+  transform-origin: center top;
+}
+.editor-command-bar__chevron { display: none; }
+.editor-command-bar__trigger[aria-haspopup="menu"]::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 18.578125px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-bottom: 5px solid #1c1c1c;
+}
+
+.editor-command-bar__divider {
+  position: relative;
+  display: block;
+  width: 17px;
+  height: 42px;
+  flex: 0 0 17px;
+}
+.editor-command-bar__divider::before {
+  position: absolute;
+  top: 11px;
+  left: 8px;
+  width: 1px;
+  height: 20px;
+  background: rgba(100, 104, 113, .38);
+  content: "";
+  transform: scaleX(.5);
+  transform-origin: center;
+}
+
+.editor-command-bar__menu {
+  position: fixed;
+  min-width: 168px;
+  max-width: calc(100vw - 12px);
+  max-height: calc(100vh - 12px);
+  padding: 4px 0;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(30, 39, 54, .15);
+  color: #33353b;
+  font-family: "Frutiger Next LT W1G", Calibri, Arial, Helvetica, sans-serif;
+  z-index: 1000;
+}
+.editor-command-bar__menu-row { display: block; }
+.editor-command-bar__menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+.editor-command-bar__menu-item:hover:not(:disabled),
+.editor-command-bar__menu-item:focus-visible:not(:disabled) { outline: none; background: #edf1f5; }
+.editor-command-bar__menu-item:disabled { color: #aeb1b8; cursor: not-allowed; }
+.editor-command-bar__menu-item kbd { color: #858b95; font: inherit; }
+.editor-command-bar__menu-divider { display: block; height: 1px; margin: 0 12px; background: rgba(100, 104, 113, .18); }
+.editor-command-bar__empty { display: block; padding: 7px 8px; color: #8b9099; font-size: 12px; white-space: nowrap; }
+
+@media (max-width: 1050px) {
+  .editor-command-bar { max-width: calc(100vw - 14px); }
+}

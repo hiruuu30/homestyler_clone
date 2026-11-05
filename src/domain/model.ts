@@ -13,7 +13,7 @@ import type {
   WallOpening,
   WallOpeningKind,
 } from './types';
-import { floorFinishForRoom, normalizeFloorFinishMapping } from './floor-finish';
+import { ceilingFinishForRoom, floorFinishForRoom, normalizeFloorFinishMapping } from './floor-finish';
 
 const DEFAULT_WALL_THICKNESS = 0.12;
 const DEFAULT_WALL_HEIGHT = 2.4;
@@ -280,6 +280,13 @@ export function convertProjectUnits(project: DesignProject, units: Units): Desig
           ...room.floorFinish,
           offsetX: scaleLength(room.floorFinish.offsetX, factor),
           offsetY: scaleLength(room.floorFinish.offsetY, factor),
+        }),
+      }),
+      ...(room.ceilingFinish === undefined ? {} : {
+        ceilingFinish: freeze({
+          ...room.ceilingFinish,
+          offsetX: scaleLength(room.ceilingFinish.offsetX, factor),
+          offsetY: scaleLength(room.ceilingFinish.offsetY, factor),
         }),
       }),
     })),
@@ -1288,6 +1295,19 @@ export function updateRoomFloorFinishMapping(
   });
 }
 
+export function updateRoomCeilingFinishMapping(
+  project: DesignProject,
+  roomId: string,
+  changes: Partial<FloorFinishMapping>,
+): DesignProject {
+  const room = project.rooms.find((item) => item.id === id(roomId, 'room id'));
+  if (!room) throw new RangeError(`unknown room: ${roomId}`);
+  const ceilingFinish = normalizeFloorFinishMapping({ ...ceilingFinishForRoom(room), ...changes });
+  return copyProject(project, {
+    rooms: project.rooms.map((item) => item.id === room.id ? freeze({ ...item, ceilingFinish }) : item),
+  });
+}
+
 function defaultLevel(units: Units = 'm'): Level {
   return freeze({ id: DEFAULT_LEVEL_ID, name: 'Ground Floor', elevation: 0, height: DEFAULT_WALL_HEIGHT * unitScale('m', units) });
 }
@@ -1327,6 +1347,7 @@ export function normalizeProject(value: unknown): DesignProject {
       ...validated,
       levelId,
       ceilingVisible: typeof room.ceilingVisible === 'boolean' ? room.ceilingVisible : true,
+      ceilingFinish: normalizeFloorFinishMapping(room.ceilingFinish),
       floorFinish: normalizeFloorFinishMapping(room.floorFinish),
     });
   });

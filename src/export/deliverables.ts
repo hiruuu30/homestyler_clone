@@ -1,6 +1,6 @@
 import { roomArea } from '../domain/model';
 import type { DesignProject, FurnitureInstance, Point, Room, Wall } from '../domain/types';
-import { floorFinishForRoom, floorPatternSpec, floorPatternSvgMarkup } from '../domain/floor-finish';
+import { ceilingFinishForRoom, floorFinishForRoom, floorPatternSpec, floorPatternSvgMarkup } from '../domain/floor-finish';
 
 type Bounds = { minX: number; minY: number; width: number; height: number };
 
@@ -144,6 +144,9 @@ function selectedFloor(project: DesignProject, levelId: string) {
     ...(room.floorFinish === undefined ? {} : {
       floorFinish: { ...room.floorFinish, offsetX: room.floorFinish.offsetX * factor, offsetY: room.floorFinish.offsetY * factor },
     }),
+    ...(room.ceilingFinish === undefined ? {} : {
+      ceilingFinish: { ...room.ceilingFinish, offsetX: room.ceilingFinish.offsetX * factor, offsetY: room.ceilingFinish.offsetY * factor },
+    }),
   }));
   const walls = project.walls.filter((wall) => wall.levelId === levelId).map((wall) => ({
     ...wall,
@@ -197,10 +200,11 @@ export function exportPlanSvg(project: DesignProject, levelId = project.activeLe
   ];
   for (const room of rooms) {
     const mapping = floorFinishForRoom(room);
+    const ceilingMapping = ceilingFinishForRoom(room);
     const color = materialColor(project, room.floorMaterialId, '#eee9df');
     const spec = floorPatternSpec(room.id, mapping, color, 'm');
     const fill = spec ? `url(#${spec.id})` : color;
-    parts.push(`<path id="${xml(room.id)}" data-kind="room" data-area-m2="${number(roomArea(room))}" data-ceiling-material-id="${xml(room.ceilingMaterialId ?? '')}" data-floor-pattern="${mapping.pattern}" data-floor-rotation-deg="${number(mapping.rotation)}" data-floor-offset-x-m="${number(mapping.offsetX)}" data-floor-offset-y-m="${number(mapping.offsetY)}" data-floor-scale-x="${number(mapping.scaleX)}" data-floor-scale-y="${number(mapping.scaleY)}" d="${roomPath(room)}" fill="${xml(fill)}" fill-opacity="0.62" fill-rule="evenodd"/>`);
+    parts.push(`<path id="${xml(room.id)}" data-kind="room" data-area-m2="${number(roomArea(room))}" data-ceiling-material-id="${xml(room.ceilingMaterialId ?? '')}" data-ceiling-pattern="${ceilingMapping.pattern}" data-ceiling-rotation-deg="${number(ceilingMapping.rotation)}" data-ceiling-offset-x-m="${number(ceilingMapping.offsetX)}" data-ceiling-offset-y-m="${number(ceilingMapping.offsetY)}" data-ceiling-scale-x="${number(ceilingMapping.scaleX)}" data-ceiling-scale-y="${number(ceilingMapping.scaleY)}" data-floor-pattern="${mapping.pattern}" data-floor-rotation-deg="${number(mapping.rotation)}" data-floor-offset-x-m="${number(mapping.offsetX)}" data-floor-offset-y-m="${number(mapping.offsetY)}" data-floor-scale-x="${number(mapping.scaleX)}" data-floor-scale-y="${number(mapping.scaleY)}" d="${roomPath(room)}" fill="${xml(fill)}" fill-opacity="0.62" fill-rule="evenodd"/>`);
   }
   parts.push('</g>', '<g class="walls" fill="none" stroke="#50565e" stroke-linecap="square" stroke-linejoin="round">');
   for (const wall of walls) {

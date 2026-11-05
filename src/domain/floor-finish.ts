@@ -49,6 +49,10 @@ export function floorFinishForRoom(room: Pick<Room, 'floorFinish'>): FloorFinish
   return room.floorFinish ?? DEFAULT_FLOOR_FINISH_MAPPING;
 }
 
+export function ceilingFinishForRoom(room: Pick<Room, 'ceilingFinish'>): FloorFinishMapping {
+  return room.ceilingFinish ?? DEFAULT_FLOOR_FINISH_MAPPING;
+}
+
 export function floorPatternId(roomId: string): string {
   let hash = 2_166_136_261;
   for (let index = 0; index < roomId.length; index += 1) {

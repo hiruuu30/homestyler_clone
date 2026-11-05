@@ -34,3 +34,11 @@ Source milestone `c2c0364d1390eb29bbf1a4b5e706c814bd3bac29` reached Vercel produ
 ## Related evidence
 
 [REA capability results](REA_CAPABILITY_RESULTS.md) remains the historical record of REA installation, static analysis, and separate authenticated-CDP observations. This report supersedes neither those results nor the full-parity acceptance criteria.
+
+## Authenticated setup and new bounded evidence · November 5
+
+PingFusi's saved device authorization now passes `doctor`: a review token is present and Chrome is ready. The optional motion dependency and cloudflared warnings do not block the current static/editor workflow. No cookies or account credentials were copied into the repository. The original capture-based target remains intact; its machine assets check alone is not an attestation that this independent application's Lucide glyphs or logo match the original. A separate `homestyler-functional-editor` target was registered through the documented existing-draft review workflow, rather than forcing incomplete capture phases.
+
+The live authenticated editor was inspected at1280×649 without clearing or editing its design. The central command bar measured x335.3125/y0/width609.375/height45. The opened File menu measured x342.3125/y49.578125/width168/height262, with seven36px rows, two1px inset separators, padding4px0 and an8px radius. It was dismissed after measurement. The new local Chromium smoke reproduces those two bounding boxes exactly and verifies real local menu actions, disabled-aware keyboard navigation, outside dismissal and narrow-viewport menu visibility.
+
+This is **numeric component geometry evidence**, not a passing page-level pixel comparison. Independent glyphs/fallback fonts, disabled service features, other menu content and major rendering/catalog differences remain. No independent approving review verdict has been recorded by this update. Historical whole-page failure counts above remain historical observations, not a score of the new build.

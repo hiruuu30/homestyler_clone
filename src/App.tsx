@@ -2,19 +2,21 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Building2, Check, ChevronDown, ChevronRight, CircleHelp, Copy, Download, GitMerge,
   Eye, EyeOff, FilePlus2, Grid2X2, Layers3, Maximize2, MousePointer2, PaintBucket, PanelLeftClose,
-  PenTool, Plus, Redo2, RotateCw, Save, Scissors, Search, Sofa, Square, Trash2, Undo2, Upload,
+  PenTool, Plus, RotateCw, Scissors, Search, Settings, Mail, Sofa, Square, Trash2, Upload,
 } from 'lucide-react';
 import {
   addFurniture, addRoomHole, addWall as addProjectWall, addWallOpening, arrayFurniture, assignRoomMaterial, createPlanUnderlay, createPolygonRoom as makePolygonRoom, createRectRoom, createStarterProject, duplicateFurniture,
   addLevel as addProjectLevel, assignRoomCeilingMaterial, assignWallMaterial, convertProjectUnits, createWall as makeWall, moveFurniture, normalizeProject, removeFurniture,
-  removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomFloorFinishMapping,
+  removeLevel as removeProjectLevel, removePlanUnderlay, removeRoomHole, removeWall, removeWallOpening, roomArea, rotateFurniture, setFurnitureHidden, splitWall as splitProjectWall, updateFurniture, updatePlanUnderlay, updateWallOpening, updateRoomCeilingFinishMapping, updateRoomFloorFinishMapping,
   findJoinableWall, joinCollinearWalls, repairWallTopology, updateWallEndpoints, updateWallHeight, updateWallThickness,
 } from './domain/model';
 import type { DesignProject, FloorFinishMapping, Point, ToolMode } from './domain/types';
-import { floorFinishForRoom } from './domain/floor-finish';
+import { ceilingFinishForRoom, floorFinishForRoom } from './domain/floor-finish';
 import { deliverableFileName, exportPlanSvg, exportQuantitiesCsv } from './export/deliverables';
 import { reconstructRoomsFromWalls } from './domain/room-reconstruction';
 import { PlanCanvas } from './components/PlanCanvas';
+import { EditorCommandBar, type MenuItem, type MenuTriggerId } from './components/EditorCommandBar';
+import { clearLevelContents } from './domain/clear-level';
 const SceneViewport = lazy(() => import('./components/SceneViewport'));
 
 type ViewMode = 'plan' | '3d';
@@ -58,6 +60,7 @@ export default function App() {
   const [tool, setTool] = useState<ToolMode>('select');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saved, setSaved] = useState(true);
+  const [fileActionRequest, setFileActionRequest] = useState<{ id: number; kind: 'save' | 'save-as' } | null>(null);
   const [toast, setToast] = useState('');
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState(false);
@@ -88,6 +91,8 @@ export default function App() {
   const selectedCeilingMaterial = selectedRoom?.ceilingMaterialId ? project.materials.find((item) => item.id === selectedRoom.ceilingMaterialId) : null;
   const selectedWallMaterial = selectedWall ? project.materials.find((item) => item.id === selectedWall.materialId) : null;
   const selectedFloorFinish = selectedRoom ? floorFinishForRoom(selectedRoom) : null;
+  const selectedCeilingFinish = selectedRoom ? ceilingFinishForRoom(selectedRoom) : null;
+  const selectedSurfaceFinish = finishTarget === 'ceiling' ? selectedCeilingFinish : selectedFloorFinish;
   const lengthUnit = project.units;
   const areaUnit = project.units === 'ft' ? 'ft²' : 'm²';
   const metresToProjectUnits = project.units === 'ft' ? 1 / 0.3048 : 1;
@@ -132,6 +137,38 @@ export default function App() {
     notify('Saved on this device');
   }
   function notify(message: string) { setToast(message); window.setTimeout(() => setToast(''), 2400); }
+  function clearActiveLevel(mode: 'furniture' | 'finishes' | 'furniture-and-finishes') {
+    try {
+      const next = clearLevelContents(project, activeLevelId, mode);
+      if (next === project) { notify('Nothing to clear on this floor'); return; }
+      commit(next);
+      if (mode !== 'finishes' && selectedFurniture) setSelectedId(null);
+      notify(`${mode === 'furniture' ? 'Furniture' : mode === 'finishes' ? 'Interior finishes' : 'Furniture and interior finishes'} cleared on ${activeLevel.name} · Undo to restore`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not clear this floor');
+    }
+  }
+  function showAllHiddenFurniture() {
+    if (!visibleProject.furniture.some((item) => item.hidden)) return;
+    commit({ ...project, furniture: project.furniture.map((item) => item.levelId === activeLevelId && item.hidden ? { ...item, hidden: false } : item) });
+    notify(`Hidden objects shown on ${activeLevel.name} · Undo to restore`);
+  }
+  function chooseDrawingTool(nextTool: ToolMode) {
+    setView('plan');
+    setTool(nextTool);
+    setPanel('build');
+    setCollapsed(false);
+  }
+  function openPanel(nextPanel: PanelMode) {
+    setPanel(nextPanel);
+    setCollapsed(false);
+  }
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch { notify('Fullscreen is unavailable in this browser'); }
+  }
   function createRoom(start: Point, end: Point) {
     if (distance(start, end) * metresPerProjectUnit < 0.35) { notify('Draw a larger room'); return; }
     const minX = Math.min(start.x, end.x);
@@ -290,6 +327,15 @@ export default function App() {
     try { commit(updateWallOpening(project, selectedOpening.id, changes)); }
     catch (error) { notify(error instanceof Error ? error.message : 'Could not update this opening'); }
   }
+  function moveOpening(openingId: string, center: number) {
+    try {
+      commit(updateWallOpening(project, openingId, { center }));
+      setSelectedId(openingId);
+      notify('Opening moved · Undo to restore');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not move this opening');
+    }
+  }
   function applyMaterial(materialId: string) {
     if (selectedWall) {
       try { commit(assignWallMaterial(project, selectedWall.id, materialId)); }
@@ -319,6 +365,21 @@ export default function App() {
       notify(error instanceof Error ? error.message : 'Could not update the floor finish mapping');
       return false;
     }
+  }
+  function editSelectedRoomCeilingFinish(changes: Partial<FloorFinishMapping>): boolean {
+    if (!selectedRoom) return false;
+    try {
+      commit(updateRoomCeilingFinishMapping(project, selectedRoom.id, changes));
+      return true;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Could not update the ceiling finish mapping');
+      return false;
+    }
+  }
+  function editSelectedRoomSurfaceFinish(changes: Partial<FloorFinishMapping>): boolean {
+    return finishTarget === 'ceiling'
+      ? editSelectedRoomCeilingFinish(changes)
+      : editSelectedRoomFloorFinish(changes);
   }
   function exportProject() {
     const blob = new Blob([JSON.stringify({ ...project, activeLevelId }, null, 2)], { type: 'application/json' });
@@ -489,10 +550,19 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (target instanceof HTMLElement) target.blur();
+        setFileActionRequest((current) => ({ id: (current?.id ?? 0) + 1, kind: event.shiftKey ? 'save-as' : 'save' }));
+        return;
+      }
       if (target instanceof HTMLElement && (target.isContentEditable || target.matches('input, textarea, select'))) return;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); }
+      if (!event.altKey && event.key.toLowerCase() === 'o' && !(target instanceof HTMLElement && target.closest('[role="menu"], [role="toolbar"]'))) { event.preventDefault(); importRef.current?.click(); }
+      else if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'h') { event.preventDefault(); showAllHiddenFurniture(); }
+      else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); }
       else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); redo(); }
       else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd' && selectedFurniture) { event.preventDefault(); duplicateSelectedFurniture(); }
+      else if (event.shiftKey && !event.ctrlKey && !event.metaKey && event.key === 'Delete') { event.preventDefault(); clearActiveLevel('furniture'); }
       else if ((event.key === 'Delete' || event.key === 'Backspace') && (selectedFurniture || selectedWall || selectedOpening)) { event.preventDefault(); deleteSelected(); }
       else if (event.code === 'Space' && selectedFurniture) { event.preventDefault(); rotateSelected(); }
     };
@@ -500,20 +570,78 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  useEffect(() => {
+    // A numeric field commits on blur; persist from the following render's current project.
+    if (fileActionRequest?.kind === 'save') save();
+    else if (fileActionRequest?.kind === 'save-as') exportProject();
+  }, [fileActionRequest]);
+
+  const commandMenus: Partial<Record<MenuTriggerId, readonly MenuItem[]>> = {
+    file: [
+      { id: 'new', label: 'New', onSelect: newDesign },
+      { id: 'open', label: 'Open...', shortcut: 'O', onSelect: () => importRef.current?.click() },
+      { id: 'save', label: 'Save', shortcut: 'Ctrl S', dividerBefore: true, title: 'Save in this browser only', onSelect: save },
+      { id: 'save-as', label: 'Save As', shortcut: 'Ctrl ⇧ S', title: 'Download a local RoomLab JSON copy', onSelect: exportProject },
+      { id: 'edit', label: 'Edit', dividerBefore: true, title: 'Open local project settings and file tools', onSelect: () => openPanel('project') },
+      { id: 'share', label: 'Share the Design', disabled: true, title: 'Cloud sharing is not implemented' },
+      { id: 'history', label: 'Version History', disabled: true, title: 'Cloud project history is not implemented; local Undo/Redo is available' },
+    ],
+    clear: [
+      { id: 'view', label: 'Clear View', disabled: true },
+      { id: 'furniture', label: 'Clear Furniture', shortcut: '⇧ Del', title: 'Clear furniture on the active floor only · Undo available', disabled: visibleProject.furniture.length === 0, onSelect: () => clearActiveLevel('furniture') },
+      { id: 'finishes', label: 'Clear Interior Finish', disabled: visibleProject.rooms.length === 0 && visibleProject.walls.length === 0, onSelect: () => clearActiveLevel('finishes') },
+      { id: 'combined', label: 'Clear Furniture+Interior Finish', disabled: visibleProject.furniture.length + visibleProject.rooms.length + visibleProject.walls.length === 0, onSelect: () => clearActiveLevel('furniture-and-finishes') },
+      { id: 'ai-planter', label: 'Clear AI Planter', disabled: true },
+      { id: 'guide-lines', label: 'Clear Guide Lines', disabled: true },
+    ],
+    construction: [
+      { id: 'wall', label: 'Draw Straight Walls', onSelect: () => chooseDrawingTool('wall') },
+      { id: 'room', label: 'Draw Rooms', onSelect: () => chooseDrawingTool('room') },
+      { id: 'polygon', label: 'Draw Custom Room', onSelect: () => chooseDrawingTool('polygon') },
+      { id: 'repair', label: 'Repair Wall Junctions', onSelect: repairExistingWallJunctions },
+      { id: 'reconstruct', label: 'Reconstruct Rooms', onSelect: createRoomsFromClosedWalls },
+      { id: 'guide-lines', label: 'Guide Lines', disabled: true },
+    ],
+    tools: [
+      { id: 'select', label: 'Select', onSelect: () => setTool('select') },
+      { id: 'rotate', label: 'Rotate Selected Furniture', disabled: !selectedFurniture, onSelect: rotateSelected },
+      { id: 'duplicate', label: 'Duplicate Selected Furniture', shortcut: 'Ctrl D', disabled: !selectedFurniture, onSelect: duplicateSelectedFurniture },
+      { id: 'hide', label: selectedFurniture?.hidden ? 'Show Selected Furniture' : 'Hide Selected Furniture', disabled: !selectedFurniture, onSelect: toggleSelectedFurnitureHidden },
+      { id: 'finishes', label: 'Edit Finishes', onSelect: () => openPanel('finish') },
+      { id: 'brush', label: 'Material Brush', disabled: true },
+      { id: 'ruler', label: 'Ruler', disabled: true },
+    ],
+    view: [
+      { id: 'show-all', label: 'Show All Hidden Items', shortcut: 'Ctrl ⇧ H', disabled: !visibleProject.furniture.some((item) => item.hidden), onSelect: showAllHiddenFurniture },
+      { id: 'show-some', label: 'Show Some Hidden Items', onSelect: () => openPanel('project') },
+      { id: 'plan', label: '2D Plan', checked: view === 'plan', onSelect: () => { setView('plan'); setTool('select'); } },
+      { id: 'three-d', label: '3D View', checked: view === '3d', onSelect: () => { setView('3d'); setTool('select'); } },
+      { id: 'fit', label: 'Fit View', onSelect: () => setCameraFitRequest((value) => value + 1) },
+      { id: 'catalog', label: 'Show Catalog', checked: !collapsed, onSelect: () => setCollapsed((value) => !value) },
+    ],
+    export: [
+      { id: 'plan-svg', label: 'Floor Plan · SVG', onSelect: exportFloorPlan },
+      { id: 'quantities', label: 'Bill of Materials · CSV', onSelect: exportSchedule },
+      { id: 'project-json', label: 'Project · RoomLab JSON', onSelect: exportProject },
+      { id: 'renders', label: 'Realistic Renders', disabled: true },
+      { id: 'construction-drawing', label: 'Construction Drawing', disabled: true },
+    ],
+  };
   const panelTitle = ({ build: 'Build', furniture: 'Furniture', finish: 'Finishes', project: 'Project' })[panel];
   return (
     <div className="studio-shell">
       <header className="topbar">
         <a className="brand" href="#workspace"><span className="brand-mark"><Building2 size={18} /></span><b>ROOM<span>LAB</span></b></a>
-        <button className="project-title" onClick={() => notify(project.name)}>{project.name}<ChevronDown size={13} /></button>
+        <button className="project-title" title={project.name} onClick={() => openPanel('project')}>{project.name}<ChevronDown size={13} /></button>
         <span className="cloud-state"><i /> Local project</span>
+        <EditorCommandBar menus={commandMenus} onSave={save} onUndo={undo} onRedo={redo} canUndo={undoStack.length > 0} canRedo={redoStack.length > 0} saved={saved} />
         <div className="top-spacer" />
         <div className="top-actions">
-          <button className="top-btn" title="Save project" aria-label="Save project" onClick={save}><Save size={20} /><span>{saved ? 'Save' : 'Save*'}</span></button>
-          <button className="top-btn" title="Undo" aria-label="Undo" onClick={undo} disabled={!undoStack.length}><Undo2 size={20} /><span>Undo</span></button>
-          <button className="top-btn" title="Redo" aria-label="Redo" onClick={redo} disabled={!redoStack.length}><Redo2 size={20} /><span>Redo</span></button>
-          <span className="avatar" aria-label="RoomLab account">H</span>
           <button className="icon-btn" title="Help" aria-label="Help" onClick={() => notify('Starter editor: draw rooms, add walls, furniture and finishes')}><CircleHelp size={20} /></button>
+          <button className="icon-btn" title="Project settings" aria-label="Project settings" onClick={() => openPanel('project')}><Settings size={20} /></button>
+          <button className="icon-btn inbox-unavailable" title="Cloud inbox is not implemented" aria-label="Inbox unavailable" disabled><Mail size={20} /></button>
+          <span className="avatar" aria-label="Local RoomLab project" title="Independent local editor · no cloud account">H</span>
+          <button className="icon-btn" title="Toggle fullscreen" aria-label="Toggle fullscreen" onClick={toggleFullscreen}><Maximize2 size={20} /></button>
         </div>
       </header>
       <div className="workspace" id="workspace">
@@ -611,7 +739,7 @@ export default function App() {
             {selectedRoom && <div className="panel-subnav"><button className={finishTarget === 'floor' ? 'active' : ''} onClick={() => setFinishTarget('floor')}>Floor</button><button className={finishTarget === 'ceiling' ? 'active' : ''} onClick={() => setFinishTarget('ceiling')}>Ceiling</button></div>}
             <p className="finish-target">{selectedWall ? `Choose a swatch to finish ${selectedWall.id}.` : selectedFurniture ? `Choose a swatch to color ${selectedFurniture.name}.` : selectedRoom ? `Choose a swatch for the ${finishTarget} of ${selectedRoom.name}.` : 'Select a room, wall, or object, then choose a finish.'}</p>
             <div className="material-grid">{project.materials.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).map((material) => <button key={material.id} className="material-card" onClick={() => applyMaterial(material.id)}><span style={{ background: material.color }} /><b>{material.name}</b></button>)}</div>
-            <div className="tip"><b>Catalog coverage</b><p>Only generic color swatches are present. Ceiling, object and wall assignments color complete surfaces or objects; per-side finishes, texture maps, UV controls and exhaustive finishes remain outstanding.</p></div>
+            <div className="tip"><b>Catalog coverage</b><p>Generic color swatches and procedural floor/ceiling patterns are present. Whole-object and wall colors are supported; per-side wall finishes, object texture mapping and the original material catalog are not implemented.</p></div>
           </div>}
           {panel === 'project' && <div className="panel-scroll">
             <div className="project-card"><strong>{project.name}</strong><p>{project.levels.length} floors · {project.rooms.length} rooms · {project.furniture.length} objects · {project.wallOpenings.length} openings</p><p>{area.toFixed(2)} {areaUnit} on {activeLevel.name}</p></div>
@@ -632,9 +760,9 @@ export default function App() {
           {collapsed && <button className="expand-panel" onClick={() => setCollapsed(false)} aria-label="Show panel"><ChevronRight size={17} /></button>}
           <div className="viewport-area">
             {view === 'plan'
-              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateRoomHole={createRoomHole} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} fitRequest={cameraFitRequest} />
+              ? <PlanCanvas project={visibleProject} tool={tool} selectedId={selectedId} onSelect={setSelectedId} onCreateRoom={createRoom} onCreatePolygonRoom={createFreeformRoom} onCreateRoomHole={createRoomHole} onCreateWall={createWall} onMoveFurniture={moveSelectedFurniture} onMoveOpening={moveOpening} fitRequest={cameraFitRequest} />
               : <Suspense fallback={<div className="scene-loading">Loading 3D view…</div>}><SceneViewport key={cameraFitRequest} project={visibleProject} selectedId={selectedId} onSelect={setSelectedId} onMoveFurniture={moveSelectedFurniture} /></Suspense>}
-            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
+            <div className="canvas-hint">{tool === 'room' ? 'Drag to draw a rectangular room · snaps to plan points' : tool === 'polygon' ? 'Click outline points · click the first point or press Enter to close · Esc cancels' : tool === 'hole' ? 'Click inside the selected room to trace a floor opening · close on the first point or press Enter' : tool === 'wall' ? 'Drag to add a wall · snaps to plan points' : view === 'plan' ? 'Select elements to edit · drag doors and windows along their walls · scroll to zoom' : 'Drag to orbit · Shift-drag to pan · scroll to zoom'}</div>
           </div>
           <footer className="bottom-bar">
             <div className="canvas-tools"><button className={tool === 'select' ? 'chosen' : ''} title="Select" onClick={() => setTool('select')}><MousePointer2 size={16} /></button><button className={tool === 'room' ? 'chosen' : ''} title="Draw room" onClick={() => { setView('plan'); setTool('room'); }}><Square size={16} /></button><button className={tool === 'wall' ? 'chosen' : ''} title="Draw wall" onClick={() => { setView('plan'); setTool('wall'); }}><Grid2X2 size={16} /></button><button title="Add sofa" onClick={() => { setPanel('furniture'); addSofa(); }}><Sofa size={16} /></button></div>
@@ -666,16 +794,16 @@ export default function App() {
               <label>Ceiling finish<div className="current-material"><span style={{ background: selectedCeilingMaterial?.color ?? '#faf9f6' }} />{selectedCeilingMaterial?.name ?? 'Default ceiling'}</div></label>
               <button className="rotate-btn" onClick={() => { setFinishTarget('ceiling'); setPanel('finish'); }}>Choose ceiling finish in Finishes</button>
             </section>
-            <section className="floor-finish-mapping"><h3>Floor finish mapping</h3>
-              <label className="mapping-select-label">Pattern<select className="mapping-select" value={selectedFloorFinish?.pattern ?? 'none'} onChange={(event) => editSelectedRoomFloorFinish({ pattern: event.target.value as FloorFinishMapping['pattern'] })}>
+            <section className="floor-finish-mapping"><h3>{finishTarget === 'ceiling' ? 'Ceiling finish mapping' : 'Floor finish mapping'}</h3>
+              <label className="mapping-select-label">Pattern<select className="mapping-select" value={selectedSurfaceFinish?.pattern ?? 'none'} onChange={(event) => editSelectedRoomSurfaceFinish({ pattern: event.target.value as FloorFinishMapping['pattern'] })}>
                 <option value="none">No pattern</option><option value="wood">Wood planks</option><option value="tile">Square tile</option>
               </select></label>
-              <label className="ceiling-toggle"><input type="checkbox" checked={selectedFloorFinish?.colorOverlay ?? false} onChange={(event) => editSelectedRoomFloorFinish({ colorOverlay: event.target.checked })} />Color overlay</label>
-              <NumericField label="Rotation" value={selectedFloorFinish?.rotation ?? 0} unit="°" min={-180} max={180} step={1} onCommit={(value) => editSelectedRoomFloorFinish({ rotation: value })} />
-              <NumericField label="Horizontal move" value={selectedFloorFinish?.offsetX ?? 0} unit={lengthUnit} min={-1_000_000} max={1_000_000} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedRoomFloorFinish({ offsetX: value })} />
-              <NumericField label="Vertical move" value={selectedFloorFinish?.offsetY ?? 0} unit={lengthUnit} min={-1_000_000} max={1_000_000} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedRoomFloorFinish({ offsetY: value })} />
-              <NumericField label="Scale X" value={selectedFloorFinish?.scaleX ?? 1} unit="×" min={0.05} max={20} step={0.1} onCommit={(value) => editSelectedRoomFloorFinish({ scaleX: value })} />
-              <NumericField label="Scale Y" value={selectedFloorFinish?.scaleY ?? 1} unit="×" min={0.05} max={20} step={0.1} onCommit={(value) => editSelectedRoomFloorFinish({ scaleY: value })} />
+              <label className="ceiling-toggle"><input type="checkbox" checked={selectedSurfaceFinish?.colorOverlay ?? false} onChange={(event) => editSelectedRoomSurfaceFinish({ colorOverlay: event.target.checked })} />Color overlay</label>
+              <NumericField label="Rotation" value={selectedSurfaceFinish?.rotation ?? 0} unit="°" min={-180} max={180} step={1} onCommit={(value) => editSelectedRoomSurfaceFinish({ rotation: value })} />
+              <NumericField label="Horizontal move" value={selectedSurfaceFinish?.offsetX ?? 0} unit={lengthUnit} min={-1_000_000} max={1_000_000} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedRoomSurfaceFinish({ offsetX: value })} />
+              <NumericField label="Vertical move" value={selectedSurfaceFinish?.offsetY ?? 0} unit={lengthUnit} min={-1_000_000} max={1_000_000} step={0.05 * metresToProjectUnits} onCommit={(value) => editSelectedRoomSurfaceFinish({ offsetY: value })} />
+              <NumericField label="Scale X" value={selectedSurfaceFinish?.scaleX ?? 1} unit="×" min={0.05} max={20} step={0.1} onCommit={(value) => editSelectedRoomSurfaceFinish({ scaleX: value })} />
+              <NumericField label="Scale Y" value={selectedSurfaceFinish?.scaleY ?? 1} unit="×" min={0.05} max={20} step={0.1} onCommit={(value) => editSelectedRoomSurfaceFinish({ scaleY: value })} />
             </section>
             <section><h3>Room options</h3>
               <label className="ceiling-toggle"><input type="checkbox" checked={selectedRoom.ceilingVisible} onChange={(event) => commit({ ...project, rooms: project.rooms.map((room) => room.id === selectedRoom.id ? { ...room, ceilingVisible: event.target.checked } : room) })} />Show ceiling in 3D</label>
@@ -854,5 +982,5 @@ function NumericField({ label, value, unit, min, max, step, onCommit }: {
       setDraft(String(value));
     }
   };
-  return <label>{label}<div className="unit-input"><input ref={inputRef} type="number" value={draft} min={min} max={max} step={step} onChange={(event) => setDraft(event.target.value)} onBlur={commitDraft} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { setDraft(String(value)); event.currentTarget.blur(); } }} /><span>{unit}</span></div></label>;
+  return <label>{label}<div className="unit-input"><input ref={inputRef} aria-label={label} aria-description={`Unit: ${unit}`} type="number" value={draft} min={min} max={max} step={step} onChange={(event) => setDraft(event.target.value)} onBlur={commitDraft} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { setDraft(String(value)); event.currentTarget.blur(); } }} /><span>{unit}</span></div></label>;
 }

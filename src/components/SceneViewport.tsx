@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { frameProjectCamera } from '../domain/camera';
 import { wallSolidSegments } from '../domain/wall-openings';
-import type { DesignProject, Level, Material, Point, Room } from '../domain/types';
-import { floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
+import type { DesignProject, FloorFinishMapping, Level, Material, Point, Room, Units } from '../domain/types';
+import { ceilingFinishForRoom, floorFinishForRoom, floorPatternSpec } from '../domain/floor-finish';
 
 export type SceneViewportProps = {
   project: DesignProject;
@@ -16,8 +16,12 @@ function materialColor(project: DesignProject, id: string, fallback: string): st
   return project.materials.find((material) => material.id === id)?.color ?? fallback;
 }
 
-function createFloorPatternTexture(room: Room, project: DesignProject, material: string): THREE.CanvasTexture | null {
-  const mapping = floorFinishForRoom(room);
+function createFloorPatternTexture(
+  room: Room,
+  project: Pick<DesignProject, 'units'>,
+  material: string,
+  mapping: FloorFinishMapping = floorFinishForRoom(room),
+): THREE.CanvasTexture | null {
   const spec = floorPatternSpec(room.id, mapping, material, project.units);
   if (!spec) return null;
   const canvas = document.createElement('canvas');
@@ -95,17 +99,19 @@ export function ceilingElevationForLevel(level?: Pick<Level, 'elevation' | 'heig
   return (level?.elevation ?? 0) + (level?.height ?? 2.4);
 }
 
-export function createVisibleRoomCeilings(rooms: readonly Room[], elevation: number, materials: readonly Material[] = []): THREE.Mesh[] {
+export function createVisibleRoomCeilings(rooms: readonly Room[], elevation: number, materials: readonly Material[] = [], units: Units = 'm'): THREE.Mesh[] {
   if (!Number.isFinite(elevation)) throw new TypeError('ceiling elevation must be finite');
   return rooms.filter((room) => room.ceilingVisible).map((room) => {
     const color = materials.find((material) => material.id === room.ceilingMaterialId)?.color ?? '#faf9f6';
+    const texture = createFloorPatternTexture(room, { units }, color, ceilingFinishForRoom(room));
     const material = new THREE.MeshStandardMaterial({
-      color,
+      color: texture ? '#ffffff' : color,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.18,
       depthWrite: false,
       roughness: 0.98,
+      ...(texture ? { map: texture } : {}),
     });
     const mesh = new THREE.Mesh(createRoomCeilingGeometry(room), material);
     mesh.rotation.x = Math.PI / 2;
@@ -203,7 +209,7 @@ export function SceneViewport({ project, selectedId, onSelect, onMoveFurniture }
       scene.add(mesh);
     });
 
-    createVisibleRoomCeilings(project.rooms, ceilingElevation, project.materials).forEach((mesh) => scene.add(mesh));
+    createVisibleRoomCeilings(project.rooms, ceilingElevation, project.materials, project.units).forEach((mesh) => scene.add(mesh));
 
     project.walls.forEach((wall) => {
       const dx = wall.end.x - wall.start.x;
